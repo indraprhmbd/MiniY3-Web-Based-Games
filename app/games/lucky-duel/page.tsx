@@ -13,7 +13,6 @@ import {
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -32,7 +31,14 @@ type Player = {
 
 export default function LuckyDuelPage() {
   const [phase, setPhase] = useState<"setup" | "playing" | "winner">("setup");
-  const [maxConfig, setMaxConfig] = useState(100);
+
+  // Input states as strings for setup
+  const [maxConfigInput, setMaxConfigInput] = useState("100");
+  const [p1SecretInput, setP1SecretInput] = useState("");
+  const [p2SecretInput, setP2SecretInput] = useState("");
+  const [p1Name, setP1Name] = useState("Player 1");
+  const [p2Name, setP2Name] = useState("Player 2");
+
   const [player1, setPlayer1] = useState<Player>({
     name: "Player 1",
     secretNumber: 0,
@@ -45,32 +51,49 @@ export default function LuckyDuelPage() {
     guesses: [],
     range: [1, 100],
   });
-  const [turn, setTurn] = useState<0 | 1>(0); // 0 = P1's turn to guess P2's secret
+
+  const [turn, setTurn] = useState<0 | 1>(0);
   const [currentGuess, setCurrentGuess] = useState<string>("");
   const [winner, setWinner] = useState<Player | null>(null);
   const [lastFeedback, setLastFeedback] = useState<string | null>(null);
 
-  // Setup Handlers
   const handleStartGame = () => {
-    if (!player1.secretNumber || !player2.secretNumber) {
+    const maxVal = parseInt(maxConfigInput) || 100;
+    const s1 = parseInt(p1SecretInput);
+    const s2 = parseInt(p2SecretInput);
+
+    if (isNaN(s1) || isNaN(s2)) {
       alert("Keduanya harus mengisi angka rahasia!");
       return;
     }
-    setPlayer1((prev) => ({ ...prev, range: [1, maxConfig] }));
-    setPlayer2((prev) => ({ ...prev, range: [1, maxConfig] }));
+
+    if (s1 < 1 || s1 > maxVal || s2 < 1 || s2 > maxVal) {
+      alert(`Angka rahasia harus antara 1 - ${maxVal}!`);
+      return;
+    }
+
+    setPlayer1({
+      name: p1Name,
+      secretNumber: s1,
+      guesses: [],
+      range: [1, maxVal],
+    });
+    setPlayer2({
+      name: p2Name,
+      secretNumber: s2,
+      guesses: [],
+      range: [1, maxVal],
+    });
     setPhase("playing");
   };
 
-  // Gameplay Handlers
   const handleGuess = () => {
     const guessNum = parseInt(currentGuess);
     if (isNaN(guessNum)) return;
 
     const currentPlayer = turn === 0 ? player1 : player2;
     const opponent = turn === 0 ? player2 : player1;
-    const setOpponent = turn === 0 ? setPlayer2 : setPlayer1;
 
-    // Feedback logic: narrowing the range of the OPPONENT'S secret
     if (guessNum === opponent.secretNumber) {
       setWinner(currentPlayer);
       setPhase("winner");
@@ -80,17 +103,30 @@ export default function LuckyDuelPage() {
     let feedback = "";
     if (guessNum < opponent.secretNumber) {
       feedback = `${guessNum} terlalu kecil!`;
-      // Update the range for the secret they are looking for
-      setOpponent((prev) => ({
-        ...prev,
-        range: [Math.max(prev.range[0], guessNum + 1), prev.range[1]],
-      }));
+      if (turn === 0) {
+        setPlayer2((prev) => ({
+          ...prev,
+          range: [Math.max(prev.range[0], guessNum + 1), prev.range[1]],
+        }));
+      } else {
+        setPlayer1((prev) => ({
+          ...prev,
+          range: [Math.max(prev.range[0], guessNum + 1), prev.range[1]],
+        }));
+      }
     } else {
       feedback = `${guessNum} terlalu besar!`;
-      setOpponent((prev) => ({
-        ...prev,
-        range: [prev.range[0], Math.min(prev.range[1], guessNum - 1)],
-      }));
+      if (turn === 0) {
+        setPlayer2((prev) => ({
+          ...prev,
+          range: [prev.range[0], Math.min(prev.range[1], guessNum - 1)],
+        }));
+      } else {
+        setPlayer1((prev) => ({
+          ...prev,
+          range: [prev.range[0], Math.min(prev.range[1], guessNum - 1)],
+        }));
+      }
     }
 
     setLastFeedback(`${currentPlayer.name}: ${feedback}`);
@@ -99,7 +135,7 @@ export default function LuckyDuelPage() {
   };
 
   return (
-    <div className="container max-w-lg mx-auto p-4 flex-1 flex flex-col justify-center">
+    <div className="container max-w-lg mx-auto p-4 flex-1 flex flex-col justify-center min-h-[80vh]">
       {phase === "setup" && (
         <Card className="w-full border-border/40 bg-card/50 backdrop-blur-sm">
           <CardHeader>
@@ -112,11 +148,14 @@ export default function LuckyDuelPage() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-2">
-              <Label>Rentang Maksimal (1 - ...)</Label>
+              <Label>Rentang Maksimal (1 - {maxConfigInput || "..."})</Label>
               <Input
-                type="number"
-                value={maxConfig}
-                onChange={(e) => setMaxConfig(parseInt(e.target.value) || 100)}
+                type="text"
+                inputMode="numeric"
+                value={maxConfigInput}
+                onChange={(e) =>
+                  setMaxConfigInput(e.target.value.replace(/\D/g, ""))
+                }
                 className="bg-zinc-900/50 border-zinc-800"
               />
             </div>
@@ -126,20 +165,17 @@ export default function LuckyDuelPage() {
                 <Label className="text-purple-400">Player 1</Label>
                 <Input
                   placeholder="Nama P1"
-                  value={player1.name}
-                  onChange={(e) =>
-                    setPlayer1({ ...player1, name: e.target.value })
-                  }
+                  value={p1Name}
+                  onChange={(e) => setP1Name(e.target.value)}
                   className="bg-zinc-900/50 border-zinc-800"
                 />
                 <Input
                   type="password"
+                  inputMode="numeric"
                   placeholder="Angka Rahasia"
+                  value={p1SecretInput}
                   onChange={(e) =>
-                    setPlayer1({
-                      ...player1,
-                      secretNumber: parseInt(e.target.value) || 0,
-                    })
+                    setP1SecretInput(e.target.value.replace(/\D/g, ""))
                   }
                   className="bg-zinc-900/50 border-zinc-800"
                 />
@@ -148,20 +184,17 @@ export default function LuckyDuelPage() {
                 <Label className="text-blue-400">Player 2</Label>
                 <Input
                   placeholder="Nama P2"
-                  value={player2.name}
-                  onChange={(e) =>
-                    setPlayer2({ ...player2, name: e.target.value })
-                  }
+                  value={p2Name}
+                  onChange={(e) => setP2Name(e.target.value)}
                   className="bg-zinc-900/50 border-zinc-800"
                 />
                 <Input
                   type="password"
+                  inputMode="numeric"
                   placeholder="Angka Rahasia"
+                  value={p2SecretInput}
                   onChange={(e) =>
-                    setPlayer2({
-                      ...player2,
-                      secretNumber: parseInt(e.target.value) || 0,
-                    })
+                    setP2SecretInput(e.target.value.replace(/\D/g, ""))
                   }
                   className="bg-zinc-900/50 border-zinc-800"
                 />
@@ -171,7 +204,7 @@ export default function LuckyDuelPage() {
           <CardFooter>
             <Button
               onClick={handleStartGame}
-              className="w-full size-lg bg-primary hover:bg-primary/90 font-bold flex gap-2"
+              className="w-full h-12 font-bold flex gap-2"
             >
               MULAI DUEL <Swords className="w-5 h-5" />
             </Button>
@@ -195,13 +228,15 @@ export default function LuckyDuelPage() {
 
           <div className="grid grid-cols-2 gap-4">
             <Card
-              className={`border-border/20 ${
-                turn === 1 ? "ring-2 ring-primary bg-primary/5" : "opacity-50"
+              className={`border-border/20 transition-all ${
+                turn === 1
+                  ? "ring-2 ring-primary bg-primary/5 shadow-lg"
+                  : "opacity-50"
               }`}
             >
-              <CardHeader className="p-4">
-                <CardTitle className="text-sm text-center">
-                  Target: Secret {player1.name}
+              <CardHeader className="p-3">
+                <CardTitle className="text-xs text-center uppercase tracking-tighter">
+                  Target: {player1.name}
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-4 pt-0 text-center">
@@ -211,13 +246,15 @@ export default function LuckyDuelPage() {
               </CardContent>
             </Card>
             <Card
-              className={`border-border/20 ${
-                turn === 0 ? "ring-2 ring-primary bg-primary/5" : "opacity-50"
+              className={`border-border/20 transition-all ${
+                turn === 0
+                  ? "ring-2 ring-primary bg-primary/5 shadow-lg"
+                  : "opacity-50"
               }`}
             >
-              <CardHeader className="p-4">
-                <CardTitle className="text-sm text-center">
-                  Target: Secret {player2.name}
+              <CardHeader className="p-3">
+                <CardTitle className="text-xs text-center uppercase tracking-tighter">
+                  Target: {player2.name}
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-4 pt-0 text-center">
@@ -230,23 +267,20 @@ export default function LuckyDuelPage() {
 
           <Card className="border-border/40 bg-zinc-900/40 backdrop-blur-md">
             <CardContent className="pt-6 space-y-4">
-              <div className="space-y-2">
-                <Label>Masukkan Tebakanmu</Label>
-                <Input
-                  type="number"
-                  autoFocus
-                  placeholder={`Coba angka antara ${
-                    turn === 0 ? player2.range[0] : player1.range[0]
-                  } - ${turn === 0 ? player2.range[1] : player1.range[1]}`}
-                  value={currentGuess}
-                  onChange={(e) => setCurrentGuess(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleGuess()}
-                  className="text-2xl text-center h-16 bg-zinc-950/50 border-zinc-800"
-                />
-              </div>
+              <Input
+                type="text"
+                inputMode="numeric"
+                placeholder="Masukkan Tebakan..."
+                value={currentGuess}
+                onChange={(e) =>
+                  setCurrentGuess(e.target.value.replace(/\D/g, ""))
+                }
+                onKeyDown={(e) => e.key === "Enter" && handleGuess()}
+                className="text-2xl text-center h-16 bg-zinc-950/50 border-zinc-800"
+              />
               <Button
                 onClick={handleGuess}
-                className="w-full h-12 text-lg font-bold uppercase tracking-widest"
+                className="w-full h-12 text-lg font-bold uppercase"
               >
                 TEBAK!
               </Button>
@@ -254,49 +288,36 @@ export default function LuckyDuelPage() {
           </Card>
 
           {lastFeedback && (
-            <div className="p-4 rounded-lg bg-zinc-800/40 text-center text-zinc-300 animate-in fade-in zoom-in duration-300">
+            <div className="p-4 rounded-lg bg-zinc-800/40 text-center text-zinc-300 animate-in fade-in duration-300 border border-white/5">
               {lastFeedback}
             </div>
           )}
         </div>
       )}
 
-      <Dialog open={phase === "winner"} onOpenChange={() => {}}>
+      <Dialog open={phase === "winner"}>
         <DialogContent className="bg-zinc-950 border-zinc-800 text-center sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-3xl text-center pb-2 flex items-center justify-center gap-2">
-              <PartyPopper className="text-primary" /> KEMENANGAN!{" "}
-              <PartyPopper className="text-primary" />
+              <PartyPopper className="text-primary" /> KEMENANGAN!
             </DialogTitle>
-            <DialogDescription className="text-lg text-center font-medium text-zinc-300">
-              <span className="text-primary text-2xl font-bold">
-                {winner?.name}
-              </span>{" "}
+            <DialogDescription className="text-lg text-center font-medium text-zinc-300 pt-4">
+              <span className="text-primary text-3xl font-black">
+                {winner?.name.toUpperCase()}
+              </span>
+              <br />
               berhasil menebak angka rahasia lawan!
             </DialogDescription>
           </DialogHeader>
           <div className="py-6 flex flex-col items-center gap-4">
             <Trophy className="w-16 h-16 text-yellow-500 animate-bounce" />
-            <p className="text-muted-foreground italic">
-              "Siapa sangka angka itu emang beruntung."
-            </p>
           </div>
           <Button
-            className="w-full h-12 text-lg font-bold flex gap-2"
+            className="w-full h-14 text-xl font-bold flex gap-2"
             onClick={() => {
               setPhase("setup");
-              setPlayer1((p) => ({
-                ...p,
-                guesses: [],
-                range: [1, 100],
-                secretNumber: 0,
-              }));
-              setPlayer2((p) => ({
-                ...p,
-                guesses: [],
-                range: [1, 100],
-                secretNumber: 0,
-              }));
+              setP1SecretInput("");
+              setP2SecretInput("");
               setWinner(null);
               setLastFeedback(null);
             }}

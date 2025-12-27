@@ -39,7 +39,11 @@ type PlayerState = {
 
 export default function LuckyDuelComPage() {
   const [phase, setPhase] = useState<"setup" | "playing" | "winner">("setup");
-  const [maxConfig, setMaxConfig] = useState(100);
+
+  // Use string states for inputs to allow empty values while typing
+  const [maxConfigInput, setMaxConfigInput] = useState("100");
+  const [secretNumberInput, setSecretNumberInput] = useState("");
+
   const [player, setPlayer] = useState<PlayerState>({
     name: "Kamu",
     secretNumber: 0,
@@ -58,14 +62,12 @@ export default function LuckyDuelComPage() {
   const [isThinking, setIsThinking] = useState(false);
   const [showMySecret, setShowMySecret] = useState(false);
 
-  // Use a ref for player range to ensure AI always has the freshest bounds
   const playerRangeRef = useRef<[number, number]>([1, 100]);
 
   useEffect(() => {
     playerRangeRef.current = player.range;
   }, [player.range]);
 
-  // AI Logic Execution
   useEffect(() => {
     if (phase === "playing" && turn === 1 && !winner) {
       setIsThinking(true);
@@ -80,19 +82,26 @@ export default function LuckyDuelComPage() {
   }, [turn, phase, winner]);
 
   const handleStartGame = () => {
-    const secret = player.secretNumber;
-    if (!secret || secret < 1 || secret > maxConfig) {
-      alert(`Masukkan angka rahasia antara 1 - ${maxConfig}!`);
+    const maxVal = parseInt(maxConfigInput) || 100;
+    const secret = parseInt(secretNumberInput);
+
+    if (isNaN(secret) || secret < 1 || secret > maxVal) {
+      alert(`Masukkan angka rahasia antara 1 - ${maxVal}!`);
       return;
     }
-    const comSecret = Math.floor(Math.random() * maxConfig) + 1;
 
-    setPlayer((prev) => ({ ...prev, range: [1, maxConfig] }));
-    playerRangeRef.current = [1, maxConfig];
+    const comSecret = Math.floor(Math.random() * maxVal) + 1;
+
+    setPlayer((prev) => ({
+      ...prev,
+      secretNumber: secret,
+      range: [1, maxVal],
+    }));
+    playerRangeRef.current = [1, maxVal];
     setComputer((prev) => ({
       ...prev,
       secretNumber: comSecret,
-      range: [1, maxConfig],
+      range: [1, maxVal],
     }));
     setPhase("playing");
     setTurn(0);
@@ -102,7 +111,6 @@ export default function LuckyDuelComPage() {
     if (isNaN(guessNum) || winner) return;
 
     if (turn === 0) {
-      // Player guesses Computer's secret
       if (guessNum === computer.secretNumber) {
         setWinner(player.name);
         setPhase("winner");
@@ -123,7 +131,6 @@ export default function LuckyDuelComPage() {
       }
       setCurrentGuess("");
     } else {
-      // Computer guesses Player's secret
       if (guessNum === player.secretNumber) {
         setWinner(computer.name);
         setPhase("winner");
@@ -147,12 +154,11 @@ export default function LuckyDuelComPage() {
 
   const resetGame = () => {
     setPhase("setup");
-    setPlayer({ name: "Kamu", secretNumber: 0, range: [1, maxConfig] });
-    setComputer({ name: "Komputer", secretNumber: 0, range: [1, maxConfig] });
     setTurn(0);
     setWinner(null);
     setLastFeedback(null);
     setCurrentGuess("");
+    setSecretNumberInput("");
     setIsThinking(false);
   };
 
@@ -170,11 +176,15 @@ export default function LuckyDuelComPage() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-2">
-              <Label>Rentang Maksimal (1 - {maxConfig})</Label>
+              <Label>Rentang Maksimal (1 - {maxConfigInput || "..."})</Label>
               <Input
-                type="number"
-                value={maxConfig}
-                onChange={(e) => setMaxConfig(parseInt(e.target.value) || 100)}
+                type="text"
+                inputMode="numeric"
+                value={maxConfigInput}
+                onChange={(e) =>
+                  setMaxConfigInput(e.target.value.replace(/\D/g, ""))
+                }
+                placeholder="Contoh: 100"
                 className="bg-zinc-950/50 border-white/10"
               />
             </div>
@@ -182,13 +192,11 @@ export default function LuckyDuelComPage() {
               <Label className="text-blue-400">Angka Rahasiamu</Label>
               <Input
                 type="password"
-                placeholder="Angka rahasia..."
-                value={player.secretNumber || ""}
+                inputMode="numeric"
+                placeholder="Masukkan angka..."
+                value={secretNumberInput}
                 onChange={(e) =>
-                  setPlayer({
-                    ...player,
-                    secretNumber: parseInt(e.target.value) || 0,
-                  })
+                  setSecretNumberInput(e.target.value.replace(/\D/g, ""))
                 }
                 className="bg-zinc-950/50 border-white/10 text-center text-xl"
               />
@@ -258,11 +266,14 @@ export default function LuckyDuelComPage() {
           <Card className="border-white/5 bg-zinc-900/60 backdrop-blur-md relative overflow-hidden">
             <CardContent className="pt-6 space-y-4">
               <Input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 disabled={turn === 1 || isThinking}
                 placeholder={`Tebak (${computer.range[0]}-${computer.range[1]})`}
                 value={currentGuess}
-                onChange={(e) => setCurrentGuess(e.target.value)}
+                onChange={(e) =>
+                  setCurrentGuess(e.target.value.replace(/\D/g, ""))
+                }
                 onKeyDown={(e) =>
                   e.key === "Enter" && handleGuess(parseInt(currentGuess))
                 }
@@ -271,7 +282,7 @@ export default function LuckyDuelComPage() {
               <Button
                 onClick={() => handleGuess(parseInt(currentGuess))}
                 disabled={turn === 1 || isThinking}
-                className="w-full h-12 text-lg font-bold"
+                className="w-full h-12 text-lg font-bold uppercase"
               >
                 TEBAK!
               </Button>
@@ -280,7 +291,7 @@ export default function LuckyDuelComPage() {
               <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-50">
                 <div className="flex gap-2 items-center bg-zinc-900 border border-white/10 px-6 py-3 rounded-full shadow-2xl">
                   <Monitor className="w-5 h-5 text-rose-400 animate-pulse" />
-                  <span className="font-bold text-rose-400 uppercase tracking-tighter">
+                  <span className="font-bold text-rose-400 uppercase tracking-tighter text-sm">
                     AI sedang menganalisa...
                   </span>
                 </div>
