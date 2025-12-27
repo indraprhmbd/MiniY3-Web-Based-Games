@@ -29,6 +29,22 @@ export default function Home() {
       href: "/games/lucky-duel-online",
       color: "from-orange-500 to-red-500",
     },
+    {
+      id: "tictactoe",
+      title: "Tic Tac Toe (Lokal)",
+      description: "Game klasik X dan O di satu layar.",
+      tag: "1 Device",
+      href: "/games/tictactoe",
+      color: "from-cyan-500 to-teal-500",
+    },
+    {
+      id: "tictactoe-online",
+      title: "Tic Tac Toe (Online)",
+      description: "Main Tic Tac Toe jarak jauh dengan teman!",
+      tag: "Online",
+      href: "/games/tictactoe-online",
+      color: "from-pink-500 to-rose-500",
+    },
   ];
 
   return (
@@ -72,21 +88,16 @@ export default function Home() {
         ))}
 
         {/* Placeholder for future games */}
-        {[1, 2, 3].map((i) => (
-          <Card
-            key={i}
-            className="h-full border-dashed border-border/40 bg-zinc-900/10"
-          >
-            <div className="h-32 flex items-center justify-center text-muted-foreground/20">
-              <Lock className="w-12 h-12 text-zinc-800" />
-            </div>
-            <CardHeader>
-              <CardTitle className="text-xl text-muted-foreground/50 italic">
-                Segera Hadir...
-              </CardTitle>
-            </CardHeader>
-          </Card>
-        ))}
+        <Card className="h-full border-dashed border-border/40 bg-zinc-900/10">
+          <div className="h-32 flex items-center justify-center text-muted-foreground/20">
+            <Lock className="w-12 h-12 text-zinc-800" />
+          </div>
+          <CardHeader>
+            <CardTitle className="text-xl text-muted-foreground/50 italic">
+              Segera Hadir...
+            </CardTitle>
+          </CardHeader>
+        </Card>
       </div>
     </div>
   );

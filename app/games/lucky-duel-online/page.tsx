@@ -60,7 +60,7 @@ export default function LuckyDuelOnlinePage() {
 
     const interval = setInterval(async () => {
       const { data, error } = await supabase
-        .from("games")
+        .from("luckyduel_games")
         .select("*")
         .eq("id", game.id)
         .single();
@@ -84,7 +84,7 @@ export default function LuckyDuelOnlinePage() {
     const code = Math.random().toString(36).substring(2, 6).toUpperCase();
 
     const { data, error } = await supabase
-      .from("games")
+      .from("luckyduel_games")
       .insert([
         { room_code: code, player1_name: playerName, status: "waiting" },
       ])
@@ -106,7 +106,7 @@ export default function LuckyDuelOnlinePage() {
     setLoading(true);
 
     const { data, error } = await supabase
-      .from("games")
+      .from("luckyduel_games")
       .update({ player2_name: playerName, status: "setup" })
       .eq("room_code", roomCode.toUpperCase())
       .select()
@@ -140,7 +140,7 @@ export default function LuckyDuelOnlinePage() {
     }
 
     const { data, error } = await supabase
-      .from("games")
+      .from("luckyduel_games")
       .update(update)
       .eq("id", game?.id)
       .select()
@@ -189,7 +189,7 @@ export default function LuckyDuelOnlinePage() {
     }
 
     const { data, error } = await supabase
-      .from("games")
+      .from("luckyduel_games")
       .update({
         turn: game.turn === 0 ? 1 : 0,
         status: nextStatus,
