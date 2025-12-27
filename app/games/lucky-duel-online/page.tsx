@@ -51,6 +51,7 @@ export default function LuckyDuelOnlinePage() {
   const [playerRole, setPlayerRole] = useState<1 | 2 | null>(null);
   const [secretInput, setSecretInput] = useState("");
   const [guessInput, setGuessInput] = useState("");
+  const [maxRangeInput, setMaxRangeInput] = useState("100");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -82,11 +83,18 @@ export default function LuckyDuelOnlinePage() {
     if (!playerName) return setError("Masukkan namamu!");
     setLoading(true);
     const code = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const maxRange = parseInt(maxRangeInput) || 100;
 
     const { data, error } = await supabase
       .from("luckyduel_games")
       .insert([
-        { room_code: code, player1_name: playerName, status: "waiting" },
+        {
+          room_code: code,
+          player1_name: playerName,
+          status: "waiting",
+          p1_range_max: maxRange,
+          p2_range_max: maxRange,
+        },
       ])
       .select()
       .single();
@@ -252,23 +260,45 @@ export default function LuckyDuelOnlinePage() {
                 onChange={(e) => setPlayerName(e.target.value)}
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <Button onClick={createRoom} disabled={loading} variant="outline">
-                BUAT ROOM
-              </Button>
-              <div className="space-y-2">
-                <Input
-                  placeholder="KODE ROOM"
-                  value={roomCode}
-                  onChange={(e) => setRoomCode(e.target.value)}
-                />
+            <div className="grid grid-cols-2 gap-4 pt-2">
+              <div className="space-y-2 border-r border-border/40 pr-4">
+                <Label>Buat Room Baru</Label>
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">
+                    Max Range
+                  </Label>
+                  <Input
+                    type="number"
+                    value={maxRangeInput}
+                    onChange={(e) => setMaxRangeInput(e.target.value)}
+                    placeholder="100"
+                  />
+                </div>
                 <Button
-                  onClick={joinRoom}
+                  onClick={createRoom}
                   disabled={loading}
+                  variant="outline"
                   className="w-full"
                 >
-                  JOIN
+                  BUAT ROOM
                 </Button>
+              </div>
+              <div className="space-y-4">
+                <Label>Gabung Room</Label>
+                <div className="space-y-2">
+                  <Input
+                    placeholder="KODE ROOM"
+                    value={roomCode}
+                    onChange={(e) => setRoomCode(e.target.value)}
+                  />
+                  <Button
+                    onClick={joinRoom}
+                    disabled={loading}
+                    className="w-full"
+                  >
+                    JOIN
+                  </Button>
+                </div>
               </div>
             </div>
             {error && (
@@ -283,7 +313,8 @@ export default function LuckyDuelOnlinePage() {
           <CardHeader>
             <CardTitle>Setup Angka Rahasia</CardTitle>
             <CardDescription>
-              Lawanmu sudah bergabung. Masukkan angka rahasia (1-100).
+              Lawanmu sudah bergabung. Masukkan angka rahasia (1-
+              {playerRole === 1 ? game?.p1_range_max : game?.p2_range_max}).
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
