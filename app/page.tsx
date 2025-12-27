@@ -20,7 +20,7 @@ export default function Home() {
       description: "Tebak angka keberuntungan lawanmu (Satu layar).",
       tag: "Lokal",
       href: "/games/lucky-duel",
-      color: "from-purple-500 to-blue-500",
+      image: "/games/lucky-duel.webp",
     },
     {
       id: "lucky-duel-online",
@@ -28,7 +28,7 @@ export default function Home() {
       description: "Duel tebak angka jarak jauh bareng pacar/teman!",
       tag: "Online",
       href: "/games/lucky-duel-online",
-      color: "from-orange-500 to-red-500",
+      image: "/games/lucky-duel.webp",
     },
     {
       id: "tictactoe",
@@ -36,7 +36,7 @@ export default function Home() {
       description: "Game klasik X dan O di satu layar.",
       tag: "Lokal",
       href: "/games/tictactoe",
-      color: "from-cyan-500 to-teal-500",
+      image: "/games/tictactoe.webp",
     },
     {
       id: "tictactoe-online",
@@ -44,7 +44,7 @@ export default function Home() {
       description: "Main Tic Tac Toe jarak jauh dengan teman!",
       tag: "Online",
       href: "/games/tictactoe-online",
-      color: "from-pink-500 to-rose-500",
+      image: "/games/tictactoe.webp",
     },
   ];
 
@@ -110,11 +110,15 @@ function GameCard({ game }: { game: any }) {
       className="group transition-all duration-300 hover:scale-[1.02] hover:-translate-y-1"
     >
       <Card className="h-full overflow-hidden border-white/5 bg-zinc-900/40 backdrop-blur-xl hover:border-white/10 transition-colors">
-        <div
-          className={`h-40 bg-gradient-to-br ${game.color} opacity-80 flex items-center justify-center relative overflow-hidden`}
-        >
-          <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors" />
-          <Gamepad2 className="w-16 h-16 text-white/90 drop-shadow-2xl transition-transform duration-500 group-hover:scale-110" />
+        <div className="h-48 relative overflow-hidden bg-zinc-950">
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/40 z-10" />
+          <Image
+            src={game.image}
+            alt={game.title}
+            fill
+            className="object-contain transition-transform duration-500 group-hover:scale-105"
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+          />
         </div>
         <CardHeader>
           <div className="flex justify-between items-start gap-2">

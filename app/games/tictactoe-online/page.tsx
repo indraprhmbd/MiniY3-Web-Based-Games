@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -202,10 +203,17 @@ export default function TicTacToeOnlinePage() {
       {/* Lobby - Create/Join */}
       {phase === "lobby" && !playerRole && (
         <Card className="bg-card/50 backdrop-blur-md">
-          <CardHeader>
-            <CardTitle className="text-2xl text-center">
-              Tic Tac Toe Online
-            </CardTitle>
+          <CardHeader className="pb-4">
+            <div className="flex justify-center">
+              <Image
+                src="/games/tictactoe.webp"
+                alt="Tic Tac Toe Online"
+                width={300}
+                height={150}
+                className="rounded-lg"
+                priority
+              />
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -244,8 +252,16 @@ export default function TicTacToeOnlinePage() {
       {/* Game Board */}
       {phase === "playing" && game && (
         <Card className="w-full border-border/40 bg-card/50 backdrop-blur-sm">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl font-bold">Tic Tac Toe</CardTitle>
+          <CardHeader className="text-center pb-4">
+            <div className="flex justify-center mb-2">
+              <Image
+                src="/games/tictactoe.webp"
+                alt="Tic Tac Toe"
+                width={250}
+                height={125}
+                className="rounded-lg"
+              />
+            </div>
             <CardDescription>
               Kamu: {playerRole} vs Lawan: {playerRole === "X" ? "O" : "X"}
             </CardDescription>

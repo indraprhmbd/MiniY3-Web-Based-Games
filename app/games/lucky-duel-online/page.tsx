@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -299,10 +300,17 @@ export default function LuckyDuelOnlinePage() {
     <div className="container max-w-lg mx-auto p-4 flex-1 flex flex-col justify-center">
       {phase === "lobby" && !playerRole && (
         <Card className="bg-card/50 backdrop-blur-md">
-          <CardHeader>
-            <CardTitle className="text-2xl text-center">
-              Lucky Duel Online
-            </CardTitle>
+          <CardHeader className="pb-4">
+            <div className="flex justify-center">
+              <Image
+                src="/games/lucky-duel.webp"
+                alt="Lucky Duel Online"
+                width={300}
+                height={150}
+                className="rounded-lg"
+                priority
+              />
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -325,6 +333,7 @@ export default function LuckyDuelOnlinePage() {
                       handleNumberInput(e.target.value, setMaxRangeInput)
                     }
                     placeholder="100"
+                    inputMode="numeric"
                   />
                 </div>
                 <Button
@@ -366,8 +375,12 @@ export default function LuckyDuelOnlinePage() {
           <CardHeader>
             <CardTitle>Setup Angka Rahasia</CardTitle>
             <CardDescription>
-              Lawanmu sudah bergabung. Masukkan angka rahasia (1-
-              {playerRole === 1 ? game?.p1_range_max : game?.p2_range_max}).
+              Lawanmu sudah bergabung. Masukkan angka rahasia (1 -{" "}
+              {formatNumber(
+                (playerRole === 1 ? game?.p1_range_max : game?.p2_range_max) ??
+                  100
+              )}
+              ).
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -378,6 +391,7 @@ export default function LuckyDuelOnlinePage() {
               onChange={(e) =>
                 handleNumberInput(e.target.value, setSecretInput, 1000000000)
               }
+              inputMode="numeric"
             />
             <Button
               onClick={submitSecret}
@@ -406,8 +420,28 @@ export default function LuckyDuelOnlinePage() {
           <div className="text-center space-y-2">
             <Badge
               variant="outline"
-              className="text-lg px-4 py-1 border-primary/50 text-primary"
+              className={`text-lg px-4 py-1 border-primary/50 inline-flex items-center gap-3 mx-auto ${
+                game.turn === playerRole! - 1
+                  ? "text-emerald-400 border-emerald-400/50"
+                  : "text-rose-400 border-rose-400/50"
+              }`}
             >
+              <span className={`relative flex h-3 w-3`}>
+                <span
+                  className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                    game.turn === playerRole! - 1
+                      ? "bg-emerald-400"
+                      : "bg-rose-400"
+                  }`}
+                ></span>
+                <span
+                  className={`relative inline-flex rounded-full h-3 w-3 ${
+                    game.turn === playerRole! - 1
+                      ? "bg-emerald-500"
+                      : "bg-rose-500"
+                  }`}
+                ></span>
+              </span>
               Giliran {game.turn === playerRole! - 1 ? "Kamu" : "Lawan"}
             </Badge>
             <h2 className="text-xl font-medium text-muted-foreground flex items-center justify-center gap-2">
@@ -463,6 +497,7 @@ export default function LuckyDuelOnlinePage() {
                   className={`text-2xl text-center h-16 bg-transparent transition-colors duration-300 ${
                     warning ? "text-yellow-500 border-yellow-500" : ""
                   }`}
+                  inputMode="numeric"
                 />
                 {warning && (
                   <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-yellow-500 text-black px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 animate-bounce">
