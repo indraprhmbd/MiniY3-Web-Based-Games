@@ -63,20 +63,20 @@ export default function Home() {
         </p>
       </section>
 
-      <Tabs defaultValue="lokal" className="space-y-8">
+      <Tabs defaultValue="online" className="space-y-8">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <TabsList className="bg-zinc-900/50 border border-white/5 p-1 h-12">
-            <TabsTrigger
-              value="lokal"
-              className="px-6 data-[state=active]:bg-zinc-800 data-[state=active]:text-primary flex gap-2"
-            >
-              <Monitor className="w-4 h-4" /> Lokal
-            </TabsTrigger>
             <TabsTrigger
               value="online"
               className="px-6 data-[state=active]:bg-zinc-800 data-[state=active]:text-primary flex gap-2"
             >
               <Globe className="w-4 h-4" /> Online
+            </TabsTrigger>
+            <TabsTrigger
+              value="lokal"
+              className="px-6 data-[state=active]:bg-zinc-800 data-[state=active]:text-primary flex gap-2"
+            >
+              <Monitor className="w-4 h-4" /> Lokal
             </TabsTrigger>
           </TabsList>
         </div>
