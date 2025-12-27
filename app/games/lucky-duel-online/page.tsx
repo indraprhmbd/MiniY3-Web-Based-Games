@@ -22,7 +22,13 @@ import {
 } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
-import { PartyPopper, RefreshCw } from "lucide-react";
+import {
+  PartyPopper,
+  RefreshCw,
+  Eye,
+  EyeOff,
+  AlertTriangle,
+} from "lucide-react";
 
 type GameState = {
   id: string;
@@ -54,6 +60,52 @@ export default function LuckyDuelOnlinePage() {
   const [maxRangeInput, setMaxRangeInput] = useState("100");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showMySecret, setShowMySecret] = useState(false);
+  const [warning, setWarning] = useState<"too-low" | "too-high" | null>(null);
+
+  const formatNumber = (val: string | number) => {
+    if (!val && val !== 0) return "";
+    return val.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  };
+
+  const parseNumber = (val: string) => {
+    return val.replace(/,/g, "");
+  };
+
+  const handleNumberInput = (
+    val: string,
+    setter: (v: string) => void,
+    max?: number
+  ) => {
+    const rawValue = parseNumber(val);
+    if (rawValue === "" || /^\d*$/.test(rawValue)) {
+      if (max && parseInt(rawValue) > max) return;
+      setter(formatNumber(rawValue));
+    }
+  };
+
+  useEffect(() => {
+    if (phase === "playing" && guessInput) {
+      const currentGuess = parseInt(parseNumber(guessInput));
+      const isP1 = playerRole === 1;
+      const targetMin = isP1 ? game?.p2_range_min : game?.p1_range_min;
+      const targetMax = isP1 ? game?.p2_range_max : game?.p1_range_max;
+
+      if (
+        !isNaN(currentGuess) &&
+        targetMin !== undefined &&
+        targetMax !== undefined
+      ) {
+        if (currentGuess < targetMin) setWarning("too-low");
+        else if (currentGuess > targetMax) setWarning("too-high");
+        else setWarning(null);
+      } else {
+        setWarning(null);
+      }
+    } else {
+      setWarning(null);
+    }
+  }, [guessInput, phase, playerRole, game]);
 
   // Polling for updates
   useEffect(() => {
@@ -83,7 +135,7 @@ export default function LuckyDuelOnlinePage() {
     if (!playerName) return setError("Masukkan namamu!");
     setLoading(true);
     const code = Math.random().toString(36).substring(2, 6).toUpperCase();
-    const maxRange = parseInt(maxRangeInput) || 100;
+    const maxRange = parseInt(parseNumber(maxRangeInput)) || 100;
 
     const { data, error } = await supabase
       .from("luckyduel_games")
@@ -130,7 +182,7 @@ export default function LuckyDuelOnlinePage() {
   };
 
   const submitSecret = async () => {
-    const secret = parseInt(secretInput);
+    const secret = parseInt(parseNumber(secretInput));
     if (isNaN(secret)) return;
     setLoading(true);
 
@@ -164,7 +216,7 @@ export default function LuckyDuelOnlinePage() {
   };
 
   const handleGuess = async () => {
-    const guess = parseInt(guessInput);
+    const guess = parseInt(parseNumber(guessInput));
     if (isNaN(guess) || !game) return;
     setLoading(true);
 
@@ -268,9 +320,10 @@ export default function LuckyDuelOnlinePage() {
                     Max Range
                   </Label>
                   <Input
-                    type="number"
                     value={maxRangeInput}
-                    onChange={(e) => setMaxRangeInput(e.target.value)}
+                    onChange={(e) =>
+                      handleNumberInput(e.target.value, setMaxRangeInput)
+                    }
                     placeholder="100"
                   />
                 </div>
@@ -322,7 +375,9 @@ export default function LuckyDuelOnlinePage() {
               type="password"
               placeholder="Angka Rahasia"
               value={secretInput}
-              onChange={(e) => setSecretInput(e.target.value)}
+              onChange={(e) =>
+                handleNumberInput(e.target.value, setSecretInput, 1000000000)
+              }
             />
             <Button
               onClick={submitSecret}
@@ -355,26 +410,75 @@ export default function LuckyDuelOnlinePage() {
             >
               Giliran {game.turn === playerRole! - 1 ? "Kamu" : "Lawan"}
             </Badge>
-            <h2 className="text-xl font-medium text-muted-foreground">
-              Target: {playerRole === 1 ? game.p2_range_min : game.p1_range_min}{" "}
-              - {playerRole === 1 ? game.p2_range_max : game.p1_range_max}
+            <h2 className="text-xl font-medium text-muted-foreground flex items-center justify-center gap-2">
+              Target:{" "}
+              {formatNumber(
+                playerRole === 1 ? game.p2_range_min : game.p1_range_min
+              )}{" "}
+              -{" "}
+              {formatNumber(
+                playerRole === 1 ? game.p2_range_max : game.p1_range_max
+              )}
             </h2>
+            <div className="flex justify-center items-center gap-2 mt-2">
+              <span className="text-sm text-muted-foreground">Angka Kamu:</span>
+              <Badge variant="secondary" className="font-mono">
+                {showMySecret
+                  ? playerRole === 1
+                    ? game.player1_secret
+                    : game.player2_secret
+                  : "****"}
+              </Badge>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setShowMySecret(!showMySecret)}
+              >
+                {showMySecret ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
           </div>
 
-          <Card className="bg-zinc-900/40">
+          <Card
+            className={`transition-all duration-300 ${
+              warning
+                ? "border-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.3)] bg-yellow-500/10"
+                : "bg-zinc-900/40"
+            }`}
+          >
             <CardContent className="pt-6 space-y-4">
-              <Input
-                type="number"
-                disabled={game.turn !== playerRole! - 1}
-                placeholder="Tebakanmu..."
-                value={guessInput}
-                onChange={(e) => setGuessInput(e.target.value)}
-                className="text-2xl text-center h-16"
-              />
+              <div className="relative">
+                <Input
+                  disabled={game.turn !== playerRole! - 1}
+                  placeholder="Tebakanmu..."
+                  value={guessInput}
+                  onChange={(e) =>
+                    handleNumberInput(e.target.value, setGuessInput)
+                  }
+                  className={`text-2xl text-center h-16 bg-transparent transition-colors duration-300 ${
+                    warning ? "text-yellow-500 border-yellow-500" : ""
+                  }`}
+                />
+                {warning && (
+                  <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-yellow-500 text-black px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 animate-bounce">
+                    <AlertTriangle className="h-3 w-3" />
+                    {warning === "too-low" ? "TOO LOW!" : "TOO HIGH!"}
+                  </div>
+                )}
+              </div>
               <Button
                 onClick={handleGuess}
                 disabled={loading || game.turn !== playerRole! - 1}
-                className="w-full h-12"
+                className={`w-full h-12 transition-all duration-300 ${
+                  warning
+                    ? "bg-yellow-500 hover:bg-yellow-600 text-black border-none"
+                    : ""
+                }`}
               >
                 TEBAK!
               </Button>
