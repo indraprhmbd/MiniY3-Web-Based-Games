@@ -29,15 +29,14 @@ export default function Home() {
       ],
     },
     {
-      id: "tictactoe",
-      title: "Tic Tac Toe",
+      id: "battleship",
+      title: "Battleship Mini",
       description:
-        "Game klasik X dan O. Uji strategimu melawan teman atau komputer!",
-      image: "/games/tictactoe.webp",
+        "Perang laut strategi dalam grid 5x5. Tenggelamkan armada lawan sebelum armadamu hancur!",
+      image: "/games/battleship.webp",
       modes: [
-        { label: "VS Computer", href: "/games/tictactoe-com", icon: Monitor },
-        { label: "Multiplayer", href: "/games/tictactoe", icon: Gamepad2 },
-        { label: "Online Play", href: "/games/tictactoe-online", icon: Globe },
+        { label: "VS Computer", href: "/games/battleship-com", icon: Monitor },
+        { label: "Online War", href: "/games/battleship", icon: Globe },
       ],
     },
     {
@@ -52,14 +51,15 @@ export default function Home() {
       ],
     },
     {
-      id: "battleship",
-      title: "Battleship Mini",
+      id: "tictactoe",
+      title: "Tic Tac Toe",
       description:
-        "Perang laut strategi dalam grid 5x5. Tenggelamkan armada lawan sebelum armadamu hancur!",
-      image: "/games/battleship.webp",
+        "Game klasik X dan O. Uji strategimu melawan teman atau komputer!",
+      image: "/games/tictactoe.webp",
       modes: [
-        { label: "VS Computer", href: "/games/battleship-com", icon: Monitor },
-        { label: "Online War", href: "/games/battleship", icon: Globe },
+        { label: "VS Computer", href: "/games/tictactoe-com", icon: Monitor },
+        { label: "Multiplayer", href: "/games/tictactoe", icon: Gamepad2 },
+        { label: "Online Play", href: "/games/tictactoe-online", icon: Globe },
       ],
     },
   ];

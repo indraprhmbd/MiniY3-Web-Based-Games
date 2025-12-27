@@ -50,6 +50,7 @@ type GameState = {
   winner_name: string | null;
   status: "waiting" | "setup" | "playing" | "finished";
   last_guess: number | null;
+  initial_max?: number;
 };
 
 export default function LuckyDuelOnlinePage() {
@@ -169,9 +170,9 @@ export default function LuckyDuelOnlinePage() {
         turn: 0,
         last_guess: null,
         p1_range_min: 1,
-        p1_range_max: game.p1_range_max, // Keep initial max
+        p1_range_max: game.initial_max || 100,
         p2_range_min: 1,
-        p2_range_max: game.p2_range_max,
+        p2_range_max: game.initial_max || 100,
       })
       .eq("id", game.id);
 
@@ -196,6 +197,7 @@ export default function LuckyDuelOnlinePage() {
           status: "waiting",
           p1_range_max: maxRange,
           p2_range_max: maxRange,
+          initial_max: maxRange,
         },
       ])
       .select()
@@ -276,7 +278,8 @@ export default function LuckyDuelOnlinePage() {
     const guess = parseInt(parseNumber(guessInput));
     if (isNaN(guess) || !game) return;
 
-    const maxVal = playerRole === 1 ? game.p1_range_max : game.p2_range_max;
+    // Fix: Validate against the *target* range (opponent's secret range)
+    const maxVal = playerRole === 1 ? game.p2_range_max : game.p1_range_max;
     if (guess < 1 || guess > maxVal) {
       alert(`Tebakan harus antara 1 - ${formatNumber(maxVal)}!`);
       return;
@@ -647,6 +650,7 @@ export default function LuckyDuelOnlinePage() {
       <Dialog open={phase === "winner"}>
         <DialogContent className="text-center">
           <DialogHeader>
+            <DialogTitle className="hidden">Game Over</DialogTitle>
             <DialogDescription className="text-lg text-center font-medium text-zinc-300 pt-4">
               {game?.winner_name ===
               (playerRole === 1 ? game?.player1_name : game?.player2_name) ? (

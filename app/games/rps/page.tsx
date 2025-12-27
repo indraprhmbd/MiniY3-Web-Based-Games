@@ -62,6 +62,33 @@ export default function RpsPage() {
         },
         (payload) => {
           setGame(payload.new as RPSGame);
+
+          // Auto-recovery: If both players chose but status is playing
+          const g = payload.new as RPSGame;
+          if (g.status === "playing" && g.p1_choice && g.p2_choice) {
+            // Only p1 triggers the update to avoid double writes
+            if (playerRole === 1) {
+              // Calculate winner locally again just to be safe or just call update
+              // Since we can't easily access the logic here without duplication,
+              // we will rely on a new dedicated recovery function or just duplicate the simple logic.
+              const p1 = g.p1_choice;
+              const p2 = g.p2_choice;
+              let winner = "p2";
+              if (p1 === p2) winner = "draw";
+              else if (
+                (p1 === "rock" && p2 === "scissors") ||
+                (p1 === "paper" && p2 === "rock") ||
+                (p1 === "scissors" && p2 === "paper")
+              )
+                winner = "p1";
+
+              const updates: any = { status: "finished", winner };
+              if (winner === "p1") updates.p1_score = (g.p1_score || 0) + 1;
+              if (winner === "p2") updates.p2_score = (g.p2_score || 0) + 1;
+
+              supabase.from("rps_games").update(updates).eq("id", g.id).then();
+            }
+          }
         }
       )
       .subscribe();

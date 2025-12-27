@@ -508,19 +508,52 @@ export default function BattleshipPage() {
                 <Crosshair className="w-4 h-4" /> WILAYAH MUSUH (
                 {playerRole === 1 ? game.player2_name : game.player1_name})
               </Label>
-              {isMyTurn && game.status === "playing" && (
-                <Badge className="animate-pulse bg-red-500">
-                  GILIRANMU MENEMBAK
-                </Badge>
+              <div className="flex gap-1">
+                {Array.from({ length: 3 }).map((_, i) => {
+                  const enemyShips =
+                    playerRole === 1 ? game.p2_ships : game.p1_ships;
+                  const myShots =
+                    playerRole === 1 ? game.p1_shots : game.p2_shots;
+                  // We don't know enemy ship positions locally unless we cheat,
+                  // but we can count how many unique hits we've made.
+                  // Wait, we DO know p2_ships from `game` object if RLS allows it.
+                  // BSGame type has `p2_ships`.
+                  const hits = myShots.filter((s) =>
+                    enemyShips?.includes(s)
+                  ).length;
+                  return (
+                    <div
+                      key={i}
+                      className={`w-2 h-2 rounded-full ${
+                        i < hits ? "bg-red-500 animate-pulse" : "bg-zinc-700"
+                      }`}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+            {/* ENEMY GRID CONTAINER */}
+            <div
+              className={`transition-all duration-300 rounded-xl p-1 ${
+                isMyTurn && game.status === "playing"
+                  ? "ring-2 ring-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.3)] bg-emerald-900/10"
+                  : "opacity-90"
+              }`}
+            >
+              {renderGrid(
+                false,
+                playerRole === 1 ? game.p2_ships : game.p1_ships,
+                playerRole === 1 ? game.p1_shots : game.p2_shots,
+                [],
+                handleAttack
               )}
             </div>
-            {/* We pass enemy ships to renderGrid so it can check hits, but renderGrid logic HIDES them visually unless hit */}
-            {renderGrid(
-              false,
-              playerRole === 1 ? game.p2_ships : game.p1_ships,
-              playerRole === 1 ? game.p1_shots : game.p2_shots,
-              [],
-              handleAttack
+            {isMyTurn && game.status === "playing" && (
+              <div className="text-center">
+                <Badge className="animate-pulse bg-emerald-500 hover:bg-emerald-600 text-white border-0">
+                  GILIRANMU MENEMBAK!
+                </Badge>
+              </div>
             )}
           </div>
 
@@ -528,10 +561,31 @@ export default function BattleshipPage() {
           <div className="h-px bg-white/10 w-full" />
 
           {/* MY BOARD */}
-          <div className="space-y-2">
-            <Label className="text-emerald-400 flex items-center gap-2">
-              <Anchor className="w-4 h-4" /> WILAYAH KITA
-            </Label>
+          <div className="space-y-2 opacity-80 hover:opacity-100 transition-opacity">
+            <div className="flex justify-between items-center px-1">
+              <Label className="text-emerald-400 flex items-center gap-2">
+                <Anchor className="w-4 h-4" /> WILAYAH KITA
+              </Label>
+              <div className="flex gap-1">
+                {Array.from({ length: 3 }).map((_, i) => {
+                  const myShips =
+                    playerRole === 1 ? game.p1_ships : game.p2_ships;
+                  const enemyShots =
+                    playerRole === 1 ? game.p2_shots : game.p1_shots;
+                  const hits = enemyShots.filter((s) =>
+                    myShips?.includes(s)
+                  ).length;
+                  return (
+                    <div
+                      key={i}
+                      className={`w-2 h-2 rounded-full ${
+                        i < hits ? "bg-red-500" : "bg-emerald-500"
+                      }`}
+                    />
+                  );
+                })}
+              </div>
+            </div>
             {renderGrid(
               true,
               playerRole === 1 ? game.p1_ships : game.p2_ships,
