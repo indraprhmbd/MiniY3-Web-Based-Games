@@ -100,6 +100,8 @@ export default function TicTacToeComPage() {
   const [board, setBoard] = useState<Board>(Array(9).fill(null));
   const [isPlayerTurn, setIsPlayerTurn] = useState<boolean>(true);
   const [winner, setWinner] = useState<Player | "draw" | null>(null);
+  const [playerScore, setPlayerScore] = useState(0);
+  const [comScore, setComScore] = useState(0);
   const [isThinking, setIsThinking] = useState(false);
 
   // Computer's move logic
@@ -125,6 +127,8 @@ export default function TicTacToeComPage() {
     const result = checkWinner(newBoard);
     if (result) {
       setWinner(result);
+      if (result === "X") setPlayerScore((prev) => prev + 1);
+      if (result === "O") setComScore((prev) => prev + 1);
     } else {
       setIsPlayerTurn(player === "O");
     }
@@ -143,6 +147,43 @@ export default function TicTacToeComPage() {
 
   return (
     <div className="container max-w-lg mx-auto p-4 flex-1 flex flex-col justify-center">
+      {/* SCORING HEADER */}
+      <div className="flex justify-between items-center bg-zinc-900/80 p-3 rounded-lg border border-white/5 backdrop-blur mb-6">
+        <div>
+          <div className="text-[10px] text-muted-foreground uppercase tracking-widest leading-none mb-1">
+            Room
+          </div>
+          <div className="font-mono font-bold text-lg text-primary leading-none tracking-tighter">
+            VS COM
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4 bg-black/20 px-4 py-1 rounded-full border border-white/5">
+          <div className="text-right">
+            <div className="text-[10px] text-muted-foreground uppercase leading-none mb-1 truncate max-w-[60px]">
+              KAMU (X)
+            </div>
+            <div className="text-xl font-black leading-none">{playerScore}</div>
+          </div>
+          <div className="text-zinc-600 font-bold text-sm">VS</div>
+          <div className="text-left">
+            <div className="text-[10px] text-muted-foreground uppercase leading-none mb-1 truncate max-w-[60px]">
+              KOMPUTER (O)
+            </div>
+            <div className="text-xl font-black leading-none">{comScore}</div>
+          </div>
+        </div>
+
+        <div className="text-right">
+          <div className="text-[10px] text-muted-foreground uppercase tracking-widest leading-none mb-1">
+            Mode
+          </div>
+          <div className="font-bold text-[10px] text-emerald-400 leading-none uppercase">
+            TicTacToe AI
+          </div>
+        </div>
+      </div>
+
       <Card className="w-full border-border/40 bg-card/50 backdrop-blur-sm">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold">Tic Tac Toe</CardTitle>

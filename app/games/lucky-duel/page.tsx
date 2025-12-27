@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -20,7 +20,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Swords, PartyPopper, Trophy, RefreshCw } from "lucide-react";
+import {
+  Swords,
+  PartyPopper,
+  Trophy,
+  RefreshCw,
+  AlertTriangle,
+  ArrowLeft,
+} from "lucide-react";
+import Link from "next/link";
 
 type Player = {
   name: string;
@@ -55,7 +63,28 @@ export default function LuckyDuelPage() {
   const [turn, setTurn] = useState<0 | 1>(0);
   const [currentGuess, setCurrentGuess] = useState<string>("");
   const [winner, setWinner] = useState<Player | null>(null);
+  const [p1Score, setP1Score] = useState(0);
+  const [p2Score, setP2Score] = useState(0);
   const [lastFeedback, setLastFeedback] = useState<string | null>(null);
+  const [warning, setWarning] = useState<"too-low" | "too-high" | null>(null);
+
+  // Warning Logic
+  useEffect(() => {
+    if (phase === "playing" && currentGuess) {
+      const guessNum = parseInt(currentGuess);
+      const opponent = turn === 0 ? player2 : player1;
+
+      if (!isNaN(guessNum)) {
+        if (guessNum < opponent.range[0]) setWarning("too-low");
+        else if (guessNum > opponent.range[1]) setWarning("too-high");
+        else setWarning(null);
+      } else {
+        setWarning(null);
+      }
+    } else {
+      setWarning(null);
+    }
+  }, [currentGuess, phase, turn, player1, player2]);
 
   const handleStartGame = () => {
     const maxVal = parseInt(maxConfigInput) || 100;
@@ -91,11 +120,19 @@ export default function LuckyDuelPage() {
     const guessNum = parseInt(currentGuess);
     if (isNaN(guessNum)) return;
 
+    const maxVal = parseInt(maxConfigInput) || 100;
+    if (guessNum < 1 || guessNum > maxVal) {
+      alert(`Tebakan harus antara 1 - ${maxVal}!`);
+      return;
+    }
+
     const currentPlayer = turn === 0 ? player1 : player2;
     const opponent = turn === 0 ? player2 : player1;
 
     if (guessNum === opponent.secretNumber) {
       setWinner(currentPlayer);
+      if (turn === 0) setP1Score((prev) => prev + 1);
+      else setP2Score((prev) => prev + 1);
       setPhase("winner");
       return;
     }
@@ -136,6 +173,44 @@ export default function LuckyDuelPage() {
 
   return (
     <div className="container max-w-lg mx-auto p-4 flex-1 flex flex-col justify-center min-h-[80vh]">
+      {/* SCORING HEADER */}
+      {phase !== "setup" && (
+        <div className="flex justify-between items-center bg-zinc-900/80 p-3 rounded-lg border border-white/5 backdrop-blur mb-6">
+          <div>
+            <div className="text-[10px] text-muted-foreground uppercase tracking-widest leading-none mb-1">
+              Room
+            </div>
+            <div className="font-mono font-bold text-lg text-primary leading-none tracking-tighter">
+              LOCAL
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 bg-black/20 px-4 py-1 rounded-full border border-white/5">
+            <div className="text-right">
+              <div className="text-[10px] text-muted-foreground uppercase leading-none mb-1 truncate max-w-[60px]">
+                {p1Name}
+              </div>
+              <div className="text-xl font-black leading-none">{p1Score}</div>
+            </div>
+            <div className="text-zinc-600 font-bold text-sm">VS</div>
+            <div className="text-left">
+              <div className="text-[10px] text-muted-foreground uppercase leading-none mb-1 truncate max-w-[60px]">
+                {p2Name}
+              </div>
+              <div className="text-xl font-black leading-none">{p2Score}</div>
+            </div>
+          </div>
+
+          <div className="text-right">
+            <div className="text-[10px] text-muted-foreground uppercase tracking-widest leading-none mb-1">
+              Mode
+            </div>
+            <div className="font-bold text-[10px] text-emerald-400 leading-none uppercase">
+              Shared
+            </div>
+          </div>
+        </div>
+      )}
       {phase === "setup" && (
         <Card className="w-full border-border/40 bg-card/50 backdrop-blur-sm">
           <CardHeader>
@@ -170,8 +245,10 @@ export default function LuckyDuelPage() {
                   className="bg-zinc-900/50 border-zinc-800"
                 />
                 <Input
-                  type="password"
+                  type="text"
                   inputMode="numeric"
+                  autoComplete="off"
+                  style={{ WebkitTextSecurity: "disc" } as any}
                   placeholder="Angka Rahasia"
                   value={p1SecretInput}
                   onChange={(e) =>
@@ -189,8 +266,10 @@ export default function LuckyDuelPage() {
                   className="bg-zinc-900/50 border-zinc-800"
                 />
                 <Input
-                  type="password"
+                  type="text"
                   inputMode="numeric"
+                  autoComplete="off"
+                  style={{ WebkitTextSecurity: "disc" } as any}
                   placeholder="Angka Rahasia"
                   value={p2SecretInput}
                   onChange={(e) =>
@@ -265,8 +344,20 @@ export default function LuckyDuelPage() {
             </Card>
           </div>
 
-          <Card className="border-border/40 bg-zinc-900/40 backdrop-blur-md">
-            <CardContent className="pt-6 space-y-4">
+          <Card
+            className={`border-border/40 bg-zinc-900/40 backdrop-blur-md transition-all duration-300 ${
+              warning
+                ? "border-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.3)] bg-yellow-500/10"
+                : ""
+            }`}
+          >
+            <CardContent className="pt-6 space-y-4 relative">
+              {warning && (
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-yellow-500 text-black px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 animate-bounce z-10">
+                  <AlertTriangle className="h-3 w-3" />
+                  {warning === "too-low" ? "TOO LOW!" : "TOO HIGH!"}
+                </div>
+              )}
               <Input
                 type="text"
                 inputMode="numeric"
@@ -276,11 +367,17 @@ export default function LuckyDuelPage() {
                   setCurrentGuess(e.target.value.replace(/\D/g, ""))
                 }
                 onKeyDown={(e) => e.key === "Enter" && handleGuess()}
-                className="text-2xl text-center h-16 bg-zinc-950/50 border-zinc-800"
+                className={`text-2xl text-center h-16 bg-zinc-950/50 border-zinc-800 transition-colors ${
+                  warning ? "text-yellow-500 border-yellow-500" : ""
+                }`}
               />
               <Button
                 onClick={handleGuess}
-                className="w-full h-12 text-lg font-bold uppercase"
+                className={`w-full h-12 text-lg font-bold uppercase ${
+                  warning
+                    ? "bg-yellow-500 hover:bg-yellow-600 text-black border-none"
+                    : ""
+                }`}
               >
                 TEBAK!
               </Button>
@@ -312,18 +409,28 @@ export default function LuckyDuelPage() {
           <div className="py-6 flex flex-col items-center gap-4">
             <Trophy className="w-16 h-16 text-yellow-500 animate-bounce" />
           </div>
-          <Button
-            className="w-full h-14 text-xl font-bold flex gap-2"
-            onClick={() => {
-              setPhase("setup");
-              setP1SecretInput("");
-              setP2SecretInput("");
-              setWinner(null);
-              setLastFeedback(null);
-            }}
-          >
-            MAIN LAGI <RefreshCw className="w-5 h-5" />
-          </Button>
+          <div className="flex flex-col gap-2 w-full">
+            <Button
+              className="w-full h-12 text-lg font-bold flex gap-2"
+              onClick={() => {
+                setPhase("setup");
+                setP1SecretInput("");
+                setP2SecretInput("");
+                setWinner(null);
+                setLastFeedback(null);
+              }}
+            >
+              MAIN LAGI <RefreshCw className="w-5 h-5" />
+            </Button>
+            <Link href="/" className="w-full">
+              <Button
+                variant="outline"
+                className="w-full h-12 text-lg gap-2 border-white/10 hover:bg-white/5"
+              >
+                <ArrowLeft className="w-5 h-5" /> KEMBALI
+              </Button>
+            </Link>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

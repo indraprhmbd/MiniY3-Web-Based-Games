@@ -29,7 +29,9 @@ import {
   Eye,
   EyeOff,
   AlertTriangle,
+  ArrowLeft,
 } from "lucide-react";
+import Link from "next/link";
 
 type GameState = {
   id: string;
@@ -42,6 +44,8 @@ type GameState = {
   p1_range_max: number;
   p2_range_min: number;
   p2_range_max: number;
+  p1_score: number;
+  p2_score: number;
   turn: number;
   winner_name: string | null;
   status: "waiting" | "setup" | "playing" | "finished";
@@ -110,7 +114,7 @@ export default function LuckyDuelOnlinePage() {
 
   // Polling for updates
   useEffect(() => {
-    if (!game?.id || phase === "winner") return;
+    if (!game?.id) return; // Removed phase === "winner" guard
 
     const interval = setInterval(async () => {
       const { data, error } = await supabase
@@ -122,15 +126,60 @@ export default function LuckyDuelOnlinePage() {
       if (data) {
         setGame(data);
 
+        // Auto-recovery to playing if both secrets are present but status is setup
+        if (
+          data.status === "setup" &&
+          data.player1_secret &&
+          data.player2_secret
+        ) {
+          await supabase
+            .from("luckyduel_games")
+            .update({ status: "playing" })
+            .eq("id", game.id);
+        }
+
         // Phase logic based on status
-        if (data.status === "setup") setPhase("setup");
+        if (data.status === "setup") {
+          if (phase !== "setup") {
+            setPhase("setup");
+            setSecretInput("");
+            setGuessInput("");
+            setWarning(null);
+            setShowMySecret(false);
+          }
+        }
         if (data.status === "playing") setPhase("playing");
         if (data.status === "finished") setPhase("winner");
       }
-    }, 3000);
+    }, 1000); // Faster polling for smoother reset
 
     return () => clearInterval(interval);
   }, [game?.id, phase, playerRole]);
+
+  // Reset func for online
+  const handleReset = async () => {
+    if (!game) return;
+    await supabase
+      .from("luckyduel_games")
+      .update({
+        status: "setup",
+        player1_secret: null,
+        player2_secret: null,
+        winner_name: null,
+        turn: 0,
+        last_guess: null,
+        p1_range_min: 1,
+        p1_range_max: game.p1_range_max, // Keep initial max
+        p2_range_min: 1,
+        p2_range_max: game.p2_range_max,
+      })
+      .eq("id", game.id);
+
+    setSecretInput("");
+    setGuessInput("");
+    setWarning(null);
+    // Phase will update via polling/realtime
+  };
 
   const createRoom = async () => {
     if (!playerName) return setError("Masukkan namamu!");
@@ -185,6 +234,13 @@ export default function LuckyDuelOnlinePage() {
   const submitSecret = async () => {
     const secret = parseInt(parseNumber(secretInput));
     if (isNaN(secret)) return;
+
+    const maxRange = playerRole === 1 ? game?.p1_range_max : game?.p2_range_max;
+    if (secret < 1 || (maxRange && secret > maxRange)) {
+      alert(`Angka rahasia harus antara 1 - ${formatNumber(maxRange || 100)}!`);
+      return;
+    }
+
     setLoading(true);
 
     const update: any =
@@ -219,6 +275,12 @@ export default function LuckyDuelOnlinePage() {
   const handleGuess = async () => {
     const guess = parseInt(parseNumber(guessInput));
     if (isNaN(guess) || !game) return;
+
+    const maxVal = playerRole === 1 ? game.p1_range_max : game.p2_range_max;
+    if (guess < 1 || guess > maxVal) {
+      alert(`Tebakan harus antara 1 - ${formatNumber(maxVal)}!`);
+      return;
+    }
     setLoading(true);
 
     const isP1 = playerRole === 1;
@@ -249,18 +311,25 @@ export default function LuckyDuelOnlinePage() {
       }
     }
 
+    const updates: any = {
+      turn: game.turn === 0 ? 1 : 0,
+      status: nextStatus,
+      winner_name: winner,
+      p1_range_min: p1RangeMin,
+      p1_range_max: p1RangeMax,
+      p2_range_min: p2RangeMin,
+      p2_range_max: p2RangeMax,
+      last_guess: guess,
+    };
+
+    if (guess === opponentSecret) {
+      if (isP1) updates.p1_score = (game.p1_score || 0) + 1;
+      else updates.p2_score = (game.p2_score || 0) + 1;
+    }
+
     const { data, error } = await supabase
       .from("luckyduel_games")
-      .update({
-        turn: game.turn === 0 ? 1 : 0,
-        status: nextStatus,
-        winner_name: winner,
-        p1_range_min: p1RangeMin,
-        p1_range_max: p1RangeMax,
-        p2_range_min: p2RangeMin,
-        p2_range_max: p2RangeMax,
-        last_guess: guess,
-      })
+      .update(updates)
       .eq("id", game.id)
       .select()
       .single();
@@ -270,25 +339,36 @@ export default function LuckyDuelOnlinePage() {
     setLoading(false);
   };
 
-  if (phase === "lobby" && playerRole === 1 && !game?.player2_name) {
+  if (phase === "lobby" && playerRole === 1 && game?.status === "waiting") {
     return (
-      <div className="container max-w-lg mx-auto p-4 flex-1 flex flex-col justify-center">
-        <Card className="text-center bg-card/50 backdrop-blur-md">
-          <CardHeader>
-            <CardTitle>Menunggu Lawan...</CardTitle>
-            <CardDescription>Bagikan kode ini ke lawan duelmu:</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="text-5xl font-bold tracking-widest text-primary py-4 bg-zinc-900 rounded-lg">
-              {game?.room_code}
-            </div>
-          </CardContent>
-          <CardFooter className="justify-center">
-            <p className="text-sm text-muted-foreground animate-pulse">
-              Otomatis pindah halaman jika lawan bergabung
-            </p>
-          </CardFooter>
-        </Card>
+      <div className="container max-w-md mx-auto p-4 py-20 text-center space-y-8">
+        <div className="space-y-2">
+          <h1 className="text-2xl font-bold">Menunggu Lawan...</h1>
+          <p className="text-muted-foreground">Bagikan kode ini ke lawanmu</p>
+        </div>
+
+        <div
+          onClick={() => {
+            navigator.clipboard.writeText(game.room_code || "");
+            alert("Kode room disalin!");
+          }}
+          className="bg-zinc-900 border-2 border-dashed border-zinc-700 rounded-xl p-8 py-12 cursor-pointer hover:border-primary transition-colors group relative"
+        >
+          <div className="text-6xl font-mono font-black tracking-[0.5em] pl-4 text-white group-hover:scale-110 transition-transform">
+            {game.room_code}
+          </div>
+          <div className="absolute bottom-4 left-0 right-0 text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
+            KLIK UNTUK COPY
+          </div>
+        </div>
+
+        <Button
+          variant="ghost"
+          className="text-muted-foreground"
+          onClick={() => setGame(null)}
+        >
+          Batal
+        </Button>
       </div>
     );
   }
@@ -298,19 +378,55 @@ export default function LuckyDuelOnlinePage() {
 
   return (
     <div className="container max-w-lg mx-auto p-4 flex-1 flex flex-col justify-center">
+      {/* SCORING HEADER */}
+      {game && game.status !== "waiting" && (
+        <div className="flex justify-between items-center bg-zinc-900/80 p-3 rounded-lg border border-white/5 backdrop-blur mb-6">
+          <div>
+            <div className="text-[10px] text-muted-foreground uppercase tracking-widest leading-none mb-1">
+              Room
+            </div>
+            <div className="font-mono font-bold text-lg text-primary leading-none tracking-tighter">
+              {game.room_code}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 bg-black/20 px-4 py-1 rounded-full border border-white/5">
+            <div className="text-right">
+              <div className="text-[10px] text-muted-foreground uppercase leading-none mb-1 truncate max-w-[60px]">
+                {game.player1_name}
+              </div>
+              <div className="text-xl font-black leading-none">
+                {game.p1_score || 0}
+              </div>
+            </div>
+            <div className="text-zinc-600 font-bold text-sm">VS</div>
+            <div className="text-left">
+              <div className="text-[10px] text-muted-foreground uppercase leading-none mb-1 truncate max-w-[60px]">
+                {game.player2_name || "..."}
+              </div>
+              <div className="text-xl font-black leading-none">
+                {game.p2_score || 0}
+              </div>
+            </div>
+          </div>
+
+          <div className="text-right">
+            <div className="text-[10px] text-muted-foreground uppercase tracking-widest leading-none mb-1">
+              Role
+            </div>
+            <div className="font-bold text-[10px] text-emerald-400 leading-none">
+              P{playerRole}
+            </div>
+          </div>
+        </div>
+      )}
       {phase === "lobby" && !playerRole && (
         <Card className="bg-card/50 backdrop-blur-md">
           <CardHeader className="pb-4">
-            <div className="flex justify-center">
-              <Image
-                src="/games/lucky-duel.webp"
-                alt="Lucky Duel Online"
-                width={300}
-                height={150}
-                className="rounded-lg"
-                priority
-              />
-            </div>
+            <CardTitle>Lucky Duel Online</CardTitle>
+            <CardDescription>
+              Tebak angka rahasia lawanmu sebelum dia menebak angka rahasiamu!
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -385,7 +501,8 @@ export default function LuckyDuelOnlinePage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <Input
-              type="password"
+              type="text"
+              autoComplete="off"
               placeholder="Angka Rahasia"
               value={secretInput}
               onChange={(e) =>
@@ -530,20 +647,39 @@ export default function LuckyDuelOnlinePage() {
       <Dialog open={phase === "winner"}>
         <DialogContent className="text-center">
           <DialogHeader>
-            <DialogTitle className="text-3xl text-center flex items-center justify-center gap-2">
-              <PartyPopper className="text-primary" /> MENANG!{" "}
-              <PartyPopper className="text-primary" />
-            </DialogTitle>
-            <DialogDescription className="text-center">
-              {game?.winner_name} adalah juara duel kali ini!
+            <DialogDescription className="text-lg text-center font-medium text-zinc-300 pt-4">
+              {game?.winner_name ===
+              (playerRole === 1 ? game?.player1_name : game?.player2_name) ? (
+                <span className="text-primary text-3xl font-black italic tracking-tighter block animate-pulse">
+                  CONGRATS! YOU WIN
+                </span>
+              ) : (
+                <span className="text-rose-500 text-3xl font-black italic tracking-tighter block">
+                  YOU LOSE...
+                </span>
+              )}
+              <span className="mt-2 text-sm text-zinc-500 block">
+                Pemenangnya adalah{" "}
+                <span className="text-zinc-300">{game?.winner_name}</span>
+              </span>
             </DialogDescription>
           </DialogHeader>
-          <Button
-            onClick={() => window.location.reload()}
-            className="w-full flex gap-2"
-          >
-            MAIN LAGI <RefreshCw className="w-5 h-5" />
-          </Button>
+          <div className="grid gap-2">
+            <Button
+              onClick={handleReset}
+              className="w-full flex gap-2 h-12 font-bold"
+            >
+              MAIN LAGI <RefreshCw className="w-5 h-5" />
+            </Button>
+            <Link href="/" className="w-full">
+              <Button
+                variant="outline"
+                className="w-full h-12 text-lg gap-2 border-white/10 hover:bg-white/5"
+              >
+                <ArrowLeft className="w-5 h-5" /> KEMBALI
+              </Button>
+            </Link>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

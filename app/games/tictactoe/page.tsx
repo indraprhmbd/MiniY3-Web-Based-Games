@@ -51,6 +51,8 @@ export default function TicTacToePage() {
   const [board, setBoard] = useState<Board>(Array(9).fill(null));
   const [currentPlayer, setCurrentPlayer] = useState<Player>("X");
   const [winner, setWinner] = useState<Player | "draw" | null>(null);
+  const [xScore, setXScore] = useState(0);
+  const [oScore, setOScore] = useState(0);
 
   const handleCellClick = (index: number) => {
     if (board[index] || winner) return;
@@ -62,6 +64,8 @@ export default function TicTacToePage() {
     const result = checkWinner(newBoard);
     if (result) {
       setWinner(result);
+      if (result === "X") setXScore((prev) => prev + 1);
+      if (result === "O") setOScore((prev) => prev + 1);
     } else {
       setCurrentPlayer(currentPlayer === "X" ? "O" : "X");
     }
@@ -75,6 +79,43 @@ export default function TicTacToePage() {
 
   return (
     <div className="container max-w-lg mx-auto p-4 flex-1 flex flex-col justify-center">
+      {/* SCORING HEADER */}
+      <div className="flex justify-between items-center bg-zinc-900/80 p-3 rounded-lg border border-white/5 backdrop-blur mb-6">
+        <div>
+          <div className="text-[10px] text-muted-foreground uppercase tracking-widest leading-none mb-1">
+            Room
+          </div>
+          <div className="font-mono font-bold text-lg text-primary leading-none tracking-tighter">
+            LOCAL
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4 bg-black/20 px-4 py-1 rounded-full border border-white/5">
+          <div className="text-right">
+            <div className="text-[10px] text-muted-foreground uppercase leading-none mb-1 truncate max-w-[60px]">
+              PLAYER (X)
+            </div>
+            <div className="text-xl font-black leading-none">{xScore}</div>
+          </div>
+          <div className="text-zinc-600 font-bold text-sm">VS</div>
+          <div className="text-left">
+            <div className="text-[10px] text-muted-foreground uppercase leading-none mb-1 truncate max-w-[60px]">
+              PLAYER (O)
+            </div>
+            <div className="text-xl font-black leading-none">{oScore}</div>
+          </div>
+        </div>
+
+        <div className="text-right">
+          <div className="text-[10px] text-muted-foreground uppercase tracking-widest leading-none mb-1">
+            Mode
+          </div>
+          <div className="font-bold text-[10px] text-emerald-400 leading-none uppercase">
+            Shared
+          </div>
+        </div>
+      </div>
+
       <Card className="w-full border-border/40 bg-card/50 backdrop-blur-sm">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold">Tic Tac Toe</CardTitle>

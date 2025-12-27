@@ -40,6 +40,28 @@ export default function Home() {
         { label: "Online Play", href: "/games/tictactoe-online", icon: Globe },
       ],
     },
+    {
+      id: "rps",
+      title: "Batu Gunting Kertas",
+      description:
+        "Tentukan nasibmu dengan tangan kosong! Rock, Paper, Scissors dalam format duel online.",
+      image: "/games/rps.webp",
+      modes: [
+        { label: "VS Computer", href: "/games/rps-com", icon: Monitor },
+        { label: "Online Duel", href: "/games/rps", icon: Globe },
+      ],
+    },
+    {
+      id: "battleship",
+      title: "Battleship Mini",
+      description:
+        "Perang laut strategi dalam grid 5x5. Tenggelamkan armada lawan sebelum armadamu hancur!",
+      image: "/games/battleship.webp",
+      modes: [
+        { label: "VS Computer", href: "/games/battleship-com", icon: Monitor },
+        { label: "Online War", href: "/games/battleship", icon: Globe },
+      ],
+    },
   ];
 
   return (

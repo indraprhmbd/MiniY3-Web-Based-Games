@@ -29,7 +29,10 @@ import {
   User,
   Eye,
   EyeOff,
+  AlertTriangle,
+  ArrowLeft,
 } from "lucide-react";
+import Link from "next/link";
 
 type PlayerState = {
   name: string;
@@ -58,9 +61,31 @@ export default function LuckyDuelComPage() {
   const [turn, setTurn] = useState<0 | 1>(0); // 0 = Player's turn, 1 = Computer's turn
   const [currentGuess, setCurrentGuess] = useState<string>("");
   const [winner, setWinner] = useState<string | null>(null);
-  const [lastFeedback, setLastFeedback] = useState<string | null>(null);
+  const [playerScore, setPlayerScore] = useState(0);
+  const [comScore, setComScore] = useState(0);
+  const [feedback, setFeedback] = useState<string | null>(null);
   const [isThinking, setIsThinking] = useState(false);
   const [showMySecret, setShowMySecret] = useState(false);
+  const [warning, setWarning] = useState<"too-low" | "too-high" | null>(null);
+
+  // Warning Logic
+  useEffect(() => {
+    if (phase === "playing" && currentGuess && turn === 0) {
+      // Only for player turn
+      const guessNum = parseInt(currentGuess);
+      const opponent = computer;
+
+      if (!isNaN(guessNum)) {
+        if (guessNum < opponent.range[0]) setWarning("too-low");
+        else if (guessNum > opponent.range[1]) setWarning("too-high");
+        else setWarning(null);
+      } else {
+        setWarning(null);
+      }
+    } else {
+      setWarning(null);
+    }
+  }, [currentGuess, phase, turn, computer]);
 
   const playerRangeRef = useRef<[number, number]>([1, 100]);
 
@@ -110,45 +135,51 @@ export default function LuckyDuelComPage() {
   const handleGuess = (guessNum: number) => {
     if (isNaN(guessNum) || winner) return;
 
+    const maxVal = parseInt(maxConfigInput) || 100;
+    if (guessNum < 1 || guessNum > maxVal) {
+      alert(`Tebakan harus antara 1 - ${maxVal}!`);
+      return;
+    }
+
     if (turn === 0) {
       if (guessNum === computer.secretNumber) {
         setWinner(player.name);
+        setPlayerScore((prev) => prev + 1);
         setPhase("winner");
-      } else {
-        const isTooSmall = guessNum < computer.secretNumber;
-        setComputer((prev) => ({
-          ...prev,
-          range: isTooSmall
-            ? [Math.max(prev.range[0], guessNum + 1), prev.range[1]]
-            : [prev.range[0], Math.min(prev.range[1], guessNum - 1)],
-        }));
-        setLastFeedback(
-          `${player.name}: ${guessNum} terlalu ${
-            isTooSmall ? "kecil" : "besar"
-          }!`
-        );
-        setTurn(1);
+        return;
       }
+      const isTooSmall = guessNum < computer.secretNumber;
+      setComputer((prev) => ({
+        ...prev,
+        range: isTooSmall
+          ? [Math.max(prev.range[0], guessNum + 1), prev.range[1]]
+          : [prev.range[0], Math.min(prev.range[1], guessNum - 1)],
+      }));
+      setFeedback(
+        `${player.name}: ${guessNum} terlalu ${isTooSmall ? "kecil" : "besar"}!`
+      );
+      setTurn(1);
       setCurrentGuess("");
     } else {
       if (guessNum === player.secretNumber) {
-        setWinner(computer.name);
+        setWinner("Komputer");
+        setComScore((prev) => prev + 1);
         setPhase("winner");
-      } else {
-        const isTooSmall = guessNum < player.secretNumber;
-        const newRange: [number, number] = isTooSmall
-          ? [Math.max(player.range[0], guessNum + 1), player.range[1]]
-          : [player.range[0], Math.min(player.range[1], guessNum - 1)];
-
-        setPlayer((prev) => ({ ...prev, range: newRange }));
-        playerRangeRef.current = newRange;
-        setLastFeedback(
-          `${computer.name}: ${guessNum} terlalu ${
-            isTooSmall ? "kecil" : "besar"
-          }!`
-        );
-        setTurn(0);
+        return;
       }
+      const isTooSmall = guessNum < player.secretNumber;
+      const newRange: [number, number] = isTooSmall
+        ? [Math.max(player.range[0], guessNum + 1), player.range[1]]
+        : [player.range[0], Math.min(player.range[1], guessNum - 1)];
+
+      setPlayer((prev) => ({ ...prev, range: newRange }));
+      playerRangeRef.current = newRange;
+      setFeedback(
+        `${computer.name}: ${guessNum} terlalu ${
+          isTooSmall ? "kecil" : "besar"
+        }!`
+      );
+      setTurn(0);
     }
   };
 
@@ -156,7 +187,7 @@ export default function LuckyDuelComPage() {
     setPhase("setup");
     setTurn(0);
     setWinner(null);
-    setLastFeedback(null);
+    setFeedback(null);
     setCurrentGuess("");
     setSecretNumberInput("");
     setIsThinking(false);
@@ -164,6 +195,46 @@ export default function LuckyDuelComPage() {
 
   return (
     <div className="container max-w-lg mx-auto p-4 flex-1 flex flex-col justify-center min-h-[80vh]">
+      {/* SCORING HEADER */}
+      {phase !== "setup" && (
+        <div className="flex justify-between items-center bg-zinc-900/80 p-3 rounded-lg border border-white/5 backdrop-blur mb-6">
+          <div>
+            <div className="text-[10px] text-muted-foreground uppercase tracking-widest leading-none mb-1">
+              Room
+            </div>
+            <div className="font-mono font-bold text-lg text-primary leading-none tracking-tighter">
+              VS COM
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 bg-black/20 px-4 py-1 rounded-full border border-white/5">
+            <div className="text-right">
+              <div className="text-[10px] text-muted-foreground uppercase leading-none mb-1 truncate max-w-[60px]">
+                {player.name}
+              </div>
+              <div className="text-xl font-black leading-none">
+                {playerScore}
+              </div>
+            </div>
+            <div className="text-zinc-600 font-bold text-sm">VS</div>
+            <div className="text-left">
+              <div className="text-[10px] text-muted-foreground uppercase leading-none mb-1 truncate max-w-[60px]">
+                Komputer
+              </div>
+              <div className="text-xl font-black leading-none">{comScore}</div>
+            </div>
+          </div>
+
+          <div className="text-right">
+            <div className="text-[10px] text-muted-foreground uppercase tracking-widest leading-none mb-1">
+              Mode
+            </div>
+            <div className="font-bold text-[10px] text-rose-400 leading-none uppercase">
+              AI Duel
+            </div>
+          </div>
+        </div>
+      )}
       {phase === "setup" && (
         <Card className="w-full border-white/5 bg-zinc-900/40 backdrop-blur-md">
           <CardHeader>
@@ -191,8 +262,9 @@ export default function LuckyDuelComPage() {
             <div className="space-y-4">
               <Label className="text-blue-400">Angka Rahasiamu</Label>
               <Input
-                type="password"
+                type="text"
                 inputMode="numeric"
+                autoComplete="off"
                 placeholder="Masukkan angka..."
                 value={secretNumberInput}
                 onChange={(e) =>
@@ -263,8 +335,20 @@ export default function LuckyDuelComPage() {
             </Card>
           </div>
 
-          <Card className="border-white/5 bg-zinc-900/60 backdrop-blur-md relative overflow-hidden">
+          <Card
+            className={`border-white/5 bg-zinc-900/60 backdrop-blur-md relative overflow-visible transition-all duration-300 ${
+              warning
+                ? "border-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.3)] bg-yellow-500/10"
+                : ""
+            }`}
+          >
             <CardContent className="pt-6 space-y-4">
+              {warning && (
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-yellow-500 text-black px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 animate-bounce z-10">
+                  <AlertTriangle className="h-3 w-3" />
+                  {warning === "too-low" ? "TOO LOW!" : "TOO HIGH!"}
+                </div>
+              )}
               <Input
                 type="text"
                 inputMode="numeric"
@@ -277,18 +361,24 @@ export default function LuckyDuelComPage() {
                 onKeyDown={(e) =>
                   e.key === "Enter" && handleGuess(parseInt(currentGuess))
                 }
-                className="text-2xl text-center h-16 bg-zinc-950/50 border-white/10"
+                className={`text-2xl text-center h-16 bg-zinc-950/50 border-white/10 transition-colors ${
+                  warning ? "text-yellow-500 border-yellow-500" : ""
+                }`}
               />
               <Button
                 onClick={() => handleGuess(parseInt(currentGuess))}
                 disabled={turn === 1 || isThinking}
-                className="w-full h-12 text-lg font-bold uppercase"
+                className={`w-full h-12 text-lg font-bold uppercase ${
+                  warning
+                    ? "bg-yellow-500 hover:bg-yellow-600 text-black border-none"
+                    : ""
+                }`}
               >
                 TEBAK!
               </Button>
             </CardContent>
             {isThinking && (
-              <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-50">
+              <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-20 rounded-xl">
                 <div className="flex gap-2 items-center bg-zinc-900 border border-white/10 px-6 py-3 rounded-full shadow-2xl">
                   <Monitor className="w-5 h-5 text-rose-400 animate-pulse" />
                   <span className="font-bold text-rose-400 uppercase tracking-tighter text-sm">
@@ -323,9 +413,9 @@ export default function LuckyDuelComPage() {
             </Badge>
           </div>
 
-          {lastFeedback && (
-            <div className="p-4 rounded-lg bg-zinc-800/40 text-center text-sm font-medium animate-in slide-in-from-bottom-2 duration-300 border border-white/5">
-              {lastFeedback}
+          {feedback && (
+            <div className="p-4 rounded-lg bg-zinc-800/40 text-center text-zinc-300 animate-in fade-in duration-300 border border-white/5">
+              {feedback}
             </div>
           )}
         </div>
@@ -356,12 +446,22 @@ export default function LuckyDuelComPage() {
               }`}
             />
           </div>
-          <Button
-            className="w-full h-14 text-xl font-black uppercase tracking-tighter"
-            onClick={resetGame}
-          >
-            Main Lagi <RefreshCw className="w-6 h-6 ml-2" />
-          </Button>
+          <div className="grid gap-2">
+            <Button
+              className="w-full h-14 text-xl font-black uppercase tracking-tighter"
+              onClick={resetGame}
+            >
+              Main Lagi <RefreshCw className="w-6 h-6 ml-2" />
+            </Button>
+            <Link href="/" className="w-full">
+              <Button
+                variant="outline"
+                className="w-full h-12 text-lg gap-2 border-white/10 hover:bg-white/5"
+              >
+                <ArrowLeft className="w-5 h-5" /> KEMBALI
+              </Button>
+            </Link>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
