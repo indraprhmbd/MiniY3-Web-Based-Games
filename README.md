@@ -2,17 +2,23 @@
 
 MiniY3 is a lightweight, mobile-first web gaming platform designed for simple and fun interactions with friends. The platform follows a "Shell & Cartridge" architecture where the platform acts as a shell for multiple mini-games.
 
-## Current Game: Lucky Number Duel
+## Games Collection
 
-Lucky Number Duel is a turn-based guessing game where two players attempt to find each other's secret number.
+### 1. Lucky Number Duel
 
-### Features
+A turn-based guessing game where two players attempt to find each other's secret number.
 
 - **Local Mode (Hotseat)**: Play with a friend on a single device.
-- **Online Mode**: Play remotely with a friend using a Room Code system powered by Supabase.
-- **Dynamic Range Narrowing**: The game automatically narrows the possible range of numbers based on previous guesses to help players win.
-- **Mobile First Design**: Optimized for mobile browsers with a clean dark mode interface.
-- **Professional UI**: Built using Shadcn/UI and Lucide icons (Emoji-free interface).
+- **Online Mode**: Play remotely using Room Codes.
+- **Custom Range**: Room creators can set a custom maximum number (e.g., 1-100, 1-500, etc.).
+- **Dynamic Range Narrowing**: Automatically narrows the possible range based on previous guesses.
+
+### 2. Tic Tac Toe
+
+The classic game of X and O.
+
+- **Local Mode**: Quick match on a single device.
+- **Online Mode**: Competitive play with friends over the internet using Room Codes.
 
 ## Tech Stack
 
@@ -28,36 +34,27 @@ Lucky Number Duel is a turn-based guessing game where two players attempt to fin
 ### Prerequisites
 
 - Node.js 18+
-- Supabase Project (for Online Mode)
+- Supabase Project
 
 ### Installation
 
 1. Clone the repository:
-
    ```bash
    git clone https://github.com/indraprhmbd/MiniY3-Web-Based-Games.git
    ```
-
 2. Navigate to the project directory:
-
    ```bash
    cd MiniY3-Web-Based-Games
    ```
-
 3. Install dependencies:
-
    ```bash
    npm install
    ```
-
-4. Setup Environment Variables:
-   Create a `.env.local` file in the root directory with your Supabase credentials:
-
+4. Setup Environment Variables in `.env.local`:
    ```text
    NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
    NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
    ```
-
 5. Run the development server:
    ```bash
    npm run dev
@@ -65,10 +62,12 @@ Lucky Number Duel is a turn-based guessing game where two players attempt to fin
 
 ## Database Schema (Supabase)
 
-To enable Online Mode, run the following SQL script in your Supabase SQL Editor:
+Run these SQL scripts in your Supabase SQL Editor to enable Online Mode:
+
+### Lucky Duel (`luckyduel_games`)
 
 ```sql
-CREATE TABLE games (
+CREATE TABLE luckyduel_games (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   room_code TEXT UNIQUE NOT NULL,
   player1_name TEXT,
@@ -85,9 +84,24 @@ CREATE TABLE games (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   last_guess INTEGER
 );
+ALTER PUBLICATION supabase_realtime ADD TABLE luckyduel_games;
+```
 
--- Enable Realtime for this table
-ALTER PUBLICATION supabase_realtime ADD TABLE games;
+### Tic Tac Toe (`tictactoe_games`)
+
+```sql
+CREATE TABLE tictactoe_games (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  room_code TEXT UNIQUE NOT NULL,
+  player_x_name TEXT,
+  player_o_name TEXT,
+  board TEXT DEFAULT '---------',
+  current_turn TEXT DEFAULT 'X',
+  winner TEXT,
+  status TEXT DEFAULT 'waiting',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER PUBLICATION supabase_realtime ADD TABLE tictactoe_games;
 ```
 
 ## Credits
