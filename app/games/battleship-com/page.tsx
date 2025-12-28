@@ -400,7 +400,7 @@ export default function BattleshipComPage() {
                   )}
                   {turn === "computer" && (
                     <Badge variant="outline" className="animate-pulse">
-                      KOMPUTER BERPIKIR...
+                      AI BERPIKIR...
                     </Badge>
                   )}
                 </div>
