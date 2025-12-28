@@ -88,15 +88,15 @@ export default function Home() {
 
 function GameCard({ game }: { game: any }) {
   return (
-    <Card className="h-full overflow-hidden border-white/5 bg-zinc-900/40 backdrop-blur-xl hover:border-white/10 transition-all duration-300">
-      <div className="h-56 relative overflow-hidden bg-zinc-950">
+    <Card className="pt-0 h-full overflow-hidden border-white/5 bg-zinc-900/40 backdrop-blur-xl hover:border-white/10 transition-all duration-300">
+      <div className="w-full relative overflow-hidden bg-zinc-950">
         <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/60 z-10" />
         <Image
           src={game.image}
           alt={game.title}
-          fill
-          className="object-cover transition-transform duration-500 group-hover:scale-105"
-          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+          width={600}
+          height={400}
+          className="w-full h-auto object-cover transition-transform duration-500 group-hover:scale-105"
         />
       </div>
       <CardHeader>
