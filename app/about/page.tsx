@@ -21,6 +21,7 @@ import {
   Layers,
   Sparkles,
   ArrowRight,
+  RefreshCw,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -45,6 +46,11 @@ export default function AboutPage() {
       name: "Supabase",
       icon: <Cpu className="w-4 h-4" />,
       category: "Backend",
+    },
+    {
+      name: "React Query",
+      icon: <RefreshCw className="w-4 h-4" />,
+      category: "State Mgmt",
     },
     {
       name: "React",

@@ -240,7 +240,6 @@ export default function RpsComPage() {
               <div className="p-4 rounded-xl bg-black/40 border border-white/10 text-center">
                 {result === "win" && (
                   <>
-                    <Trophy className="w-12 h-12 text-yellow-500 mx-auto mb-2 animate-bounce" />
                     <h2 className="text-2xl font-black text-primary italic tracking-tighter">
                       MENANG!
                     </h2>
@@ -249,7 +248,6 @@ export default function RpsComPage() {
                 )}
                 {result === "lose" && (
                   <>
-                    <div className="text-4xl mb-2">💀</div>
                     <h2 className="text-2xl font-black text-rose-500 italic tracking-tighter">
                       KALAH...
                     </h2>
@@ -258,7 +256,6 @@ export default function RpsComPage() {
                 )}
                 {result === "draw" && (
                   <>
-                    <div className="text-4xl mb-2">🤝</div>
                     <h2 className="text-2xl font-black text-yellow-500 italic tracking-tighter">
                       SERI!
                     </h2>

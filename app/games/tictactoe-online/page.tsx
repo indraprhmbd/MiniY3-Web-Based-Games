@@ -8,9 +8,7 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import {
   Dialog,
@@ -21,8 +19,9 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
-import { RefreshCw, Trophy, Minus } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 type Player = "X" | "O";
 
@@ -63,84 +62,111 @@ function checkWinner(board: string): Player | "draw" | null {
   return null;
 }
 
+const fetchGame = async (id: string) => {
+  const { data, error } = await supabase
+    .from("tictactoe_games")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (error) throw error;
+  return data as GameState;
+};
+
 export default function TicTacToeOnlinePage() {
   const [phase, setPhase] = useState<"lobby" | "playing" | "finished">("lobby");
   const [roomCode, setRoomCode] = useState("");
-  const [game, setGame] = useState<GameState | null>(null);
+  const [gameId, setGameId] = useState<string | null>(null);
   const [playerName, setPlayerName] = useState("");
   const [playerRole, setPlayerRole] = useState<Player | null>(null);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Polling for updates
-  useEffect(() => {
-    if (!game?.id) return; // Removed phase === "finished" guard
+  const queryClient = useQueryClient();
 
-    const interval = setInterval(async () => {
-      const { data } = await supabase
+  const { data: game, isLoading } = useQuery({
+    queryKey: ["tictactoe", gameId],
+    queryFn: () => fetchGame(gameId!),
+    enabled: !!gameId,
+    refetchInterval: 1000,
+  });
+
+  const createRoomMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const code = Math.random().toString(36).substring(2, 6).toUpperCase();
+      const { data, error } = await supabase
         .from("tictactoe_games")
-        .select("*")
-        .eq("id", game.id)
+        .insert([{ room_code: code, player_x_name: name, status: "waiting" }])
+        .select()
         .single();
-
-      if (data) {
-        setGame(data); // Always update game state
-        if (data.status === "playing") setPhase("playing");
-        // Only set finished if actually finished, but allow playing if status reverts to playing (reset)
-        if (data.status === "finished") setPhase("finished");
-      }
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, [game?.id, phase]);
-
-  const createRoom = async () => {
-    if (!playerName) return setError("Masukkan namamu!");
-    setLoading(true);
-    const code = Math.random().toString(36).substring(2, 6).toUpperCase();
-
-    const { data, error } = await supabase
-      .from("tictactoe_games")
-      .insert([
-        { room_code: code, player_x_name: playerName, status: "waiting" },
-      ])
-      .select()
-      .single();
-
-    if (error) setError(error.message);
-    else {
-      setGame(data);
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      setGameId(data.id);
       setPlayerRole("X");
       setPhase("lobby");
-    }
-    setLoading(false);
-  };
+      queryClient.setQueryData(["tictactoe", data.id], data);
+    },
+    onError: (err: any) => setError(err.message),
+  });
 
-  const joinRoom = async () => {
-    if (!playerName || !roomCode)
-      return setError("Nama dan Kode Room harus diisi!");
-    setLoading(true);
-
-    const { data, error } = await supabase
-      .from("tictactoe_games")
-      .update({ player_o_name: playerName, status: "playing" })
-      .eq("room_code", roomCode.toUpperCase())
-      .select()
-      .single();
-
-    if (error) setError("Room tidak ditemukan!");
-    else {
-      setGame(data);
+  const joinRoomMutation = useMutation({
+    mutationFn: async ({ name, code }: { name: string; code: string }) => {
+      const { data, error } = await supabase
+        .from("tictactoe_games")
+        .update({ player_o_name: name, status: "playing" })
+        .eq("room_code", code.toUpperCase())
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      setGameId(data.id);
       setPlayerRole("O");
       setPhase("playing");
-    }
-    setLoading(false);
+      queryClient.setQueryData(["tictactoe", data.id], data);
+    },
+    onError: () => setError("Room tidak ditemukan atau error!"),
+  });
+
+  const updateGameMutation = useMutation({
+    mutationFn: async (updates: Partial<GameState>) => {
+      if (!gameId) throw new Error("No game ID");
+      const { data, error } = await supabase
+        .from("tictactoe_games")
+        .update(updates)
+        .eq("id", gameId)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(["tictactoe", gameId], data);
+    },
+  });
+
+  // Sync Phase
+  useEffect(() => {
+    if (!game) return;
+    if (game.status === "playing") setPhase("playing");
+    if (game.status === "finished") setPhase("finished");
+  }, [game]);
+
+  const createRoom = () => {
+    if (!playerName) return setError("Masukkan namamu!");
+    createRoomMutation.mutate(playerName);
   };
 
-  const handleCellClick = async (index: number) => {
+  const joinRoom = () => {
+    if (!playerName || !roomCode)
+      return setError("Nama dan Kode Room harus diisi!");
+    joinRoomMutation.mutate({ name: playerName, code: roomCode });
+  };
+
+  const handleCellClick = (index: number) => {
     if (!game || game.board[index] !== "-" || game.current_turn !== playerRole)
       return;
-    setLoading(true);
 
     const newBoard = game.board.split("");
     newBoard[index] = playerRole!;
@@ -171,18 +197,26 @@ export default function TicTacToeOnlinePage() {
     if (result === "X") updates.x_score = (game.x_score || 0) + 1;
     if (result === "O") updates.o_score = (game.o_score || 0) + 1;
 
-    const { data } = await supabase
-      .from("tictactoe_games")
-      .update(updates)
-      .eq("id", game.id)
-      .select()
-      .single();
-
-    if (data) setGame(data);
-    setLoading(false);
+    updateGameMutation.mutate(updates);
   };
 
-  // Waiting for opponent
+  const handleReset = () => {
+    if (!game) return;
+    updateGameMutation.mutate({
+      board: "---------",
+      current_turn: "X",
+      winner: null,
+      status: "playing",
+    });
+    setPhase("playing");
+  };
+
+  const isMutating =
+    createRoomMutation.isPending ||
+    joinRoomMutation.isPending ||
+    updateGameMutation.isPending;
+
+  // UI
   if (phase === "lobby" && playerRole === "X" && !game?.player_o_name) {
     return (
       <div className="container max-w-md mx-auto p-4 py-20 text-center space-y-8">
@@ -210,7 +244,7 @@ export default function TicTacToeOnlinePage() {
           variant="ghost"
           className="text-muted-foreground"
           onClick={() => {
-            setGame(null);
+            setGameId(null);
             setPhase("lobby");
           }}
         >
@@ -289,7 +323,11 @@ export default function TicTacToeOnlinePage() {
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <Button onClick={createRoom} disabled={loading} variant="outline">
+              <Button
+                onClick={createRoom}
+                disabled={isMutating}
+                variant="outline"
+              >
                 BUAT ROOM
               </Button>
               <div className="space-y-2">
@@ -300,7 +338,7 @@ export default function TicTacToeOnlinePage() {
                 />
                 <Button
                   onClick={joinRoom}
-                  disabled={loading}
+                  disabled={isMutating}
                   className="w-full"
                 >
                   JOIN
@@ -344,7 +382,9 @@ export default function TicTacToeOnlinePage() {
                   key={index}
                   onClick={() => handleCellClick(index)}
                   disabled={
-                    cell !== "-" || game.current_turn !== playerRole || loading
+                    cell !== "-" ||
+                    game.current_turn !== playerRole ||
+                    isMutating
                   }
                   className={`
                     aspect-square rounded-lg text-4xl font-bold
@@ -405,20 +445,7 @@ export default function TicTacToeOnlinePage() {
             <div className="grid gap-2">
               <Button
                 className="w-full h-12 text-lg font-bold flex gap-2"
-                onClick={async () => {
-                  if (!game) return;
-                  // Reset game state in DB
-                  await supabase
-                    .from("tictactoe_games")
-                    .update({
-                      board: "---------",
-                      current_turn: "X",
-                      winner: null,
-                      status: "playing",
-                    })
-                    .eq("id", game.id);
-                  setPhase("playing");
-                }}
+                onClick={handleReset}
               >
                 Main Lagi <RefreshCw className="w-5 h-5" />
               </Button>

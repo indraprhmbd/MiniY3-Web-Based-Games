@@ -17,6 +17,8 @@ import {
   RefreshCw,
   ArrowLeft,
   Trophy,
+  Anchor,
+  ShieldAlert,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
@@ -26,6 +28,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 
 type GamePhase = "setup" | "playing" | "finished";
 
@@ -111,8 +114,6 @@ export default function BattleshipComPage() {
 
   const executeComputerTurn = () => {
     // Logic: Pick random unshot coordinate
-    // Smart-ish: If previously hit something, maybe try around it?
-    // For now: pure random on creating valid moves map
     const potentialMoves: string[] = [];
     for (let r = 0; r < gridSize; r++) {
       for (let c = 0; c < gridSize; c++) {
@@ -123,7 +124,7 @@ export default function BattleshipComPage() {
       }
     }
 
-    if (potentialMoves.length === 0) return; // Should not happen in 5x5
+    if (potentialMoves.length === 0) return;
 
     const randomIdx = Math.floor(Math.random() * potentialMoves.length);
     const shot = potentialMoves[randomIdx];
@@ -176,11 +177,12 @@ export default function BattleshipComPage() {
   };
 
   // --- RENDER HELPERS ---
-  const renderGrid = (owner: "player" | "computer") => {
+  const renderGrid = (
+    owner: "player" | "computer",
+    isMinimap: boolean = false
+  ) => {
     const cells = [];
     const isPlayer = owner === "player";
-    // If player board: show my ships, show com shots
-    // If com board: hide com ships (unless debugging/gameover), show my shots
 
     for (let r = 0; r < gridSize; r++) {
       for (let c = 0; c < gridSize; c++) {
@@ -194,50 +196,61 @@ export default function BattleshipComPage() {
           isShip = myShips.includes(coord);
           isShot = comShots.includes(coord);
         } else {
-          isShip = comShips.includes(coord); // Hidden logic handled in content
+          isShip = comShips.includes(coord);
           isShot = myShots.includes(coord);
         }
 
         let content = null;
-        // Default water
-        let bgClass = "bg-blue-900/20";
 
-        // Interactive class
+        // Styles
+        let bgClass = isMinimap
+          ? "bg-black/40 border-white/5"
+          : "bg-blue-900/20";
+        let roundedClass = isMinimap ? "rounded-sm" : "rounded-md";
+        let cellSizeClass = isMinimap
+          ? "w-[12px] h-[12px] md:w-[16px] md:h-[16px]"
+          : "aspect-square";
+        let iconSize = isMinimap ? "w-2 h-2" : "w-4 h-4";
+
         let cursorClass = "cursor-default";
-        if (phase === "setup" && isPlayer)
-          cursorClass = "cursor-pointer hover:bg-emerald-500/20";
-        if (phase === "playing" && !isPlayer && !isShot)
-          cursorClass = "cursor-crosshair hover:bg-rose-500/20";
 
-        // Logic
+        if (!isMinimap) {
+          if (phase === "setup" && isPlayer)
+            cursorClass = "cursor-pointer hover:bg-emerald-500/20";
+          if (phase === "playing" && !isPlayer && !isShot && turn === "player")
+            cursorClass = "cursor-crosshair hover:bg-rose-500/20";
+        }
+
         if (isPlayer) {
           // My Board
           if (isShip) {
             bgClass = isShot ? "bg-red-500/50" : "bg-emerald-500/50";
-            content = (
-              <Ship
-                className={`w-4 h-4 ${
-                  isShot ? "text-white animate-pulse" : "text-emerald-200"
-                }`}
-              />
-            );
+            if (!isMinimap) {
+              content = (
+                <Ship
+                  className={`${iconSize} ${
+                    isShot ? "text-white animate-pulse" : "text-emerald-200"
+                  }`}
+                />
+              );
+            }
           } else if (isShot) {
             bgClass = "bg-zinc-700/50";
-            content = <div className="w-2 h-2 rounded-full bg-white/20" />;
+            if (!isMinimap)
+              content = <div className="w-2 h-2 rounded-full bg-white/20" />;
           }
         } else {
           // Enemy Board
           if (isShot) {
             if (isShip) {
               bgClass = "bg-red-500";
-              content = <Skull className="w-4 h-4 text-white animate-bounce" />;
+              content = (
+                <Skull className={`${iconSize} text-white animate-bounce`} />
+              );
             } else {
               bgClass = "bg-zinc-700";
               content = <div className="w-3 h-3 rounded-full bg-white/30" />;
             }
-          } else {
-            // Not shot yet
-            // Secretly, if we wanted to cheat we could check isShip here but we won't render it
           }
         }
 
@@ -246,7 +259,8 @@ export default function BattleshipComPage() {
             key={coord}
             onClick={() => handleCellClick(r, c, owner)}
             className={`
-               aspect-square border border-white/5 rounded-md flex items-center justify-center transition-all duration-200
+               ${cellSizeClass}
+               border ${roundedClass} flex items-center justify-center transition-all duration-200
                ${bgClass} ${cursorClass}
             `}
           >
@@ -257,7 +271,11 @@ export default function BattleshipComPage() {
     }
 
     return (
-      <div className="grid grid-cols-5 gap-1.5 p-2 bg-black/20 rounded-xl border border-white/5">
+      <div
+        className={`grid grid-cols-5 ${isMinimap ? "gap-0.5" : "gap-1.5"} ${
+          !isMinimap ? "p-2 bg-black/20 rounded-xl border border-white/5" : ""
+        }`}
+      >
         {cells}
       </div>
     );
@@ -303,79 +321,100 @@ export default function BattleshipComPage() {
       </div>
 
       <Card className="w-full border-border/40 bg-card/50 backdrop-blur-sm">
-        <CardHeader className="text-center pb-2">
-          <CardTitle className="text-2xl font-bold">Battleship Mini</CardTitle>
+        <CardHeader className="text-center pb-2 relative min-h-[100px] flex flex-col justify-center">
+          <CardTitle className="text-3xl font-black italic tracking-tighter flex items-center justify-center gap-2">
+            <Anchor className="text-blue-500" /> BATTLESHIP{" "}
+            <span className="text-sm font-normal text-muted-foreground bg-zinc-800 px-2 rounded">
+              MINI
+            </span>
+          </CardTitle>
           <CardDescription>
             {phase === "setup"
               ? "Tempatkan 3 Kapalmu"
               : "Hancurkan Kapal Musuh!"}
           </CardDescription>
-        </CardHeader>
 
-        <CardContent className="space-y-6">
-          {/* GAMEPLAY LAYOUT */}
-          <div className="flex flex-col gap-6">
-            {/* ENEMY BOARD (Only visible when playing/finished) */}
-            <div
-              className={`transition-all duration-500 ${
-                phase === "setup"
-                  ? "opacity-30 blur-sm pointer-events-none grayscale"
-                  : ""
-              }`}
-            >
-              <div className="flex justify-between items-center mb-2 px-1">
-                <span className="text-xs font-bold text-rose-400 uppercase tracking-wider flex items-center gap-2">
-                  <Crosshair className="w-3 h-3" /> Area Musuh
-                </span>
-                <div className="flex gap-1">
+          {/* MINIMAP MOVED HERE */}
+          {(phase === "playing" || phase === "finished") && (
+            <div className="absolute right-2 top-2 scale-75 origin-top-right bg-zinc-950/90 border border-zinc-800 p-1.5 rounded-lg shadow-xl backdrop-blur-md z-10 flex flex-col gap-1 w-[100px]">
+              <div className="flex items-center justify-between">
+                <Label className="text-[8px] text-emerald-400 font-bold uppercase tracking-widest flex items-center gap-1">
+                  BASE
+                </Label>
+                <div className="flex gap-0.5">
                   {Array.from({ length: totalShips }).map((_, i) => (
                     <div
                       key={i}
-                      className={`w-2 h-2 rounded-full ${
-                        i < myShots.filter((s) => comShips.includes(s)).length
-                          ? "bg-red-500 animate-pulse"
-                          : "bg-zinc-700"
-                      }`}
-                    />
-                  ))}
-                </div>
-              </div>
-              {renderGrid("computer")}
-            </div>
-
-            {/* MY BOARD */}
-            <div>
-              <div className="flex justify-between items-center mb-2 px-1">
-                <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-2">
-                  <Ship className="w-3 h-3" /> Area Kamu
-                </span>
-                <div className="flex gap-1">
-                  {Array.from({ length: totalShips }).map((_, i) => (
-                    <div
-                      key={i}
-                      className={`w-2 h-2 rounded-full ${
+                      className={`w-1 h-1 rounded-full ${
                         i < comShots.filter((s) => myShips.includes(s)).length
-                          ? "bg-red-500"
+                          ? "bg-red-500 animate-pulse"
                           : "bg-emerald-500"
                       }`}
                     />
                   ))}
                 </div>
               </div>
-              {renderGrid("player")}
+              {renderGrid("player", true)}
             </div>
-          </div>
+          )}
+        </CardHeader>
 
-          {/* ACTIONS */}
+        <CardContent className="space-y-6">
+          {/* SETUP PHASE: Show Big Player Board */}
           {phase === "setup" && (
-            <div className="pt-2">
+            <div className="flex flex-col gap-6">
+              <div>
+                <div className="flex justify-between items-center mb-2 px-1">
+                  <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-2">
+                    <Ship className="w-3 h-3" /> Area Kamu
+                  </span>
+                  <Badge variant="outline">
+                    {myShips.length}/{totalShips}
+                  </Badge>
+                </div>
+                {renderGrid("player", false)}
+              </div>
               <Button
                 className="w-full font-bold h-12"
                 onClick={startGame}
                 disabled={myShips.length !== totalShips}
               >
-                MULAI PERTEMPURAN ({myShips.length}/{totalShips})
+                MULAI PERTEMPURAN
               </Button>
+            </div>
+          )}
+
+          {/* PLAYING PHASE: Minimap Layout */}
+          {(phase === "playing" || phase === "finished") && (
+            <div className="flex flex-col gap-6 relative">
+              {/* ENEMY BOARD (Big) */}
+              <div className="space-y-2 relative">
+                <div className="flex justify-between items-center mb-2 px-1">
+                  <Label className="text-red-400 flex items-center gap-2 text-lg font-bold">
+                    <Crosshair className="w-5 h-5" /> RADAR MUSUH
+                  </Label>
+                  {turn === "player" && (
+                    <Badge className="animate-pulse bg-emerald-500 hover:bg-emerald-600 text-white border-0">
+                      GILIRANMU
+                    </Badge>
+                  )}
+                  {turn === "computer" && (
+                    <Badge variant="outline" className="animate-pulse">
+                      KOMPUTER BERPIKIR...
+                    </Badge>
+                  )}
+                </div>
+
+                <div
+                  className={`transition-all duration-300 rounded-xl p-1 ${
+                    turn === "player" && phase === "playing"
+                      ? "shadow-[0_0_20px_rgba(16,185,129,0.3)] bg-gradient-to-br from-emerald-500/10 to-transparent"
+                      : "opacity-90 grayscale-[0.3]"
+                  }`}
+                >
+                  {renderGrid("computer", false)}
+                </div>
+              </div>
             </div>
           )}
         </CardContent>

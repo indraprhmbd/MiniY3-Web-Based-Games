@@ -7,24 +7,15 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/lib/supabase";
-import {
-  Hand,
-  Scissors,
-  Sticker,
-  RotateCcw,
-  Copy,
-  Trophy,
-  ArrowLeft,
-} from "lucide-react";
+import { Hand, Scissors, RotateCcw, ArrowLeft, Stone } from "lucide-react";
 import Link from "next/link";
-// import { toast } from "sonner"; // Removed
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 type RPSGame = {
   id: string;
@@ -39,161 +30,145 @@ type RPSGame = {
   status: "waiting" | "playing" | "finished";
 };
 
+const fetchGame = async (id: string) => {
+  const { data, error } = await supabase
+    .from("rps_games")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (error) throw error;
+  return data as RPSGame;
+};
+
 export default function RpsPage() {
   const [playerName, setPlayerName] = useState("");
   const [roomCode, setRoomCode] = useState("");
-  const [game, setGame] = useState<RPSGame | null>(null);
+  const [gameId, setGameId] = useState<string | null>(null);
   const [playerRole, setPlayerRole] = useState<1 | 2 | null>(null);
-  const [loading, setLoading] = useState(false);
 
-  // Realtime subscription
-  useEffect(() => {
-    if (!game?.id) return;
+  const queryClient = useQueryClient();
 
-    const channel = supabase
-      .channel(`rps:${game.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "rps_games",
-          filter: `id=eq.${game.id}`,
-        },
-        (payload) => {
-          setGame(payload.new as RPSGame);
+  const { data: game, isLoading } = useQuery({
+    queryKey: ["rps", gameId],
+    queryFn: () => fetchGame(gameId!),
+    enabled: !!gameId,
+    refetchInterval: 1000,
+  });
 
-          // Auto-recovery: If both players chose but status is playing
-          const g = payload.new as RPSGame;
-          if (g.status === "playing" && g.p1_choice && g.p2_choice) {
-            // Only p1 triggers the update to avoid double writes
-            if (playerRole === 1) {
-              // Calculate winner locally again just to be safe or just call update
-              // Since we can't easily access the logic here without duplication,
-              // we will rely on a new dedicated recovery function or just duplicate the simple logic.
-              const p1 = g.p1_choice;
-              const p2 = g.p2_choice;
-              let winner = "p2";
-              if (p1 === p2) winner = "draw";
-              else if (
-                (p1 === "rock" && p2 === "scissors") ||
-                (p1 === "paper" && p2 === "rock") ||
-                (p1 === "scissors" && p2 === "paper")
-              )
-                winner = "p1";
-
-              const updates: any = { status: "finished", winner };
-              if (winner === "p1") updates.p1_score = (g.p1_score || 0) + 1;
-              if (winner === "p2") updates.p2_score = (g.p2_score || 0) + 1;
-
-              supabase.from("rps_games").update(updates).eq("id", g.id).then();
-            }
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [game?.id]);
-
-  const createRoom = async () => {
-    if (!playerName) return alert("Masukkan namamu dulu!");
-    setLoading(true);
-
-    const code = Math.random().toString(36).substring(2, 6).toUpperCase();
-
-    const { data, error } = await supabase
-      .from("rps_games")
-      .insert([
-        {
-          room_code: code,
-          player1_name: playerName,
-          status: "waiting",
-        },
-      ])
-      .select()
-      .single();
-
-    if (error) {
-      alert(error.message);
-    } else {
-      setGame(data);
+  // Mutations
+  const createRoomMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const code = Math.random().toString(36).substring(2, 6).toUpperCase();
+      const { data, error } = await supabase
+        .from("rps_games")
+        .insert([
+          {
+            room_code: code,
+            player1_name: name,
+            status: "waiting",
+          },
+        ])
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      setGameId(data.id);
       setPlayerRole(1);
-    }
-    setLoading(false);
-  };
+      queryClient.setQueryData(["rps", data.id], data);
+    },
+    onError: (err: any) => alert(err.message),
+  });
 
-  const joinRoom = async () => {
-    if (!playerName || !roomCode) return alert("Nama dan Kode wajib diisi!");
-    setLoading(true);
+  const joinRoomMutation = useMutation({
+    mutationFn: async ({ name, code }: { name: string; code: string }) => {
+      // Check existing
+      const { data: existingGame } = await supabase
+        .from("rps_games")
+        .select("*")
+        .eq("room_code", code.toUpperCase())
+        .single();
 
-    // First check if room exists and is waiting
-    const { data: existingGame } = await supabase
-      .from("rps_games")
-      .select("*")
-      .eq("room_code", roomCode.toUpperCase())
-      .single();
+      if (!existingGame) throw new Error("Room tidak ditemukan!");
 
-    if (!existingGame) {
-      setLoading(false);
-      return alert("Room tidak ditemukan!");
-    }
+      if (existingGame.status !== "waiting") {
+        if (existingGame.player2_name === name) return existingGame;
+        throw new Error("Room penuh atau sudah mulai!");
+      }
 
-    if (existingGame.status !== "waiting") {
-      // Allow rejoin if p2 name matches (reconnection logic simplified)
-      if (existingGame.player2_name === playerName) {
-        setGame(existingGame);
-        setPlayerRole(2);
-        setLoading(false);
-        return;
+      const { data, error } = await supabase
+        .from("rps_games")
+        .update({
+          player2_name: name,
+          status: "playing",
+        })
+        .eq("room_code", code.toUpperCase())
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      setGameId(data.id);
+      setPlayerRole(2);
+      queryClient.setQueryData(["rps", data.id], data);
+    },
+    onError: (err: any) => alert(err.message),
+  });
+
+  const updateGameMutation = useMutation({
+    mutationFn: async (updates: Partial<RPSGame>) => {
+      if (!gameId) return;
+      const { data, error } = await supabase
+        .from("rps_games")
+        .update(updates)
+        .eq("id", gameId)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      if (data) queryClient.setQueryData(["rps", data.id], data);
+    },
+  });
+
+  // Auto-recovery logic
+  useEffect(() => {
+    if (!game) return;
+    if (game.status === "playing" && game.p1_choice && game.p2_choice) {
+      // Triggered by playerRole 1 ONLY to maintain single source of truth logic
+      if (playerRole === 1) {
+        const p1 = game.p1_choice;
+        const p2 = game.p2_choice;
+        let winner = "p2";
+        if (p1 === p2) winner = "draw";
+        else if (
+          (p1 === "rock" && p2 === "scissors") ||
+          (p1 === "paper" && p2 === "rock") ||
+          (p1 === "scissors" && p2 === "paper")
+        ) {
+          winner = "p1";
+        }
+
+        const updates: any = { status: "finished", winner };
+        if (winner === "p1") updates.p1_score = (game.p1_score || 0) + 1;
+        if (winner === "p2") updates.p2_score = (game.p2_score || 0) + 1;
+
+        updateGameMutation.mutate(updates);
       }
     }
+  }, [game, playerRole, updateGameMutation]);
 
-    const { data, error } = await supabase
-      .from("rps_games")
-      .update({
-        player2_name: playerName,
-        status: "playing",
-      })
-      .eq("room_code", roomCode.toUpperCase())
-      .select()
-      .single();
-
-    if (error) {
-      alert("Gagal join room");
-    } else {
-      setGame(data);
-      setPlayerRole(2);
-    }
-    setLoading(false);
+  const createRoom = () => {
+    if (!playerName) return alert("Masukkan namamu dulu!");
+    createRoomMutation.mutate(playerName);
   };
 
-  const makeMove = async (choice: "rock" | "paper" | "scissors") => {
-    if (!game || !playerRole) return;
-
-    const updateField = playerRole === 1 ? "p1_choice" : "p2_choice";
-
-    // Optimistic update
-    setGame((prev) => (prev ? { ...prev, [updateField]: choice } : null));
-
-    // Check win condition locally to send to DB
-    const currentState = { ...game, [updateField]: choice };
-    const p1 = playerRole === 1 ? choice : game.p1_choice;
-    const p2 = playerRole === 2 ? choice : game.p2_choice;
-
-    let updates: any = { [updateField]: choice };
-
-    if (p1 && p2) {
-      const winner = determineWinner(p1, p2);
-      updates.status = "finished";
-      updates.winner = winner;
-      if (winner === "p1") updates.p1_score = (game.p1_score || 0) + 1;
-      if (winner === "p2") updates.p2_score = (game.p2_score || 0) + 1;
-    }
-
-    await supabase.from("rps_games").update(updates).eq("id", game.id);
+  const joinRoom = () => {
+    if (!playerName || !roomCode) return alert("Nama dan Kode wajib diisi!");
+    joinRoomMutation.mutate({ name: playerName, code: roomCode });
   };
 
   const determineWinner = (p1: string, p2: string) => {
@@ -208,17 +183,39 @@ export default function RpsPage() {
     return "p2";
   };
 
-  const resetGame = async () => {
-    if (!game) return;
-    await supabase
-      .from("rps_games")
-      .update({
-        p1_choice: null,
-        p2_choice: null,
-        winner: null,
-        status: "playing",
-      })
-      .eq("id", game.id);
+  const makeMove = (choice: "rock" | "paper" | "scissors") => {
+    if (!game || !playerRole) return;
+    const updateField = playerRole === 1 ? "p1_choice" : "p2_choice";
+
+    // Calculate if we need to finish immediately (if current game state known)
+    // Actually, trust the server/effect logic for finish, just send choice effectively.
+    // However, original logic did optimistic checks.
+
+    const p1 = playerRole === 1 ? choice : game.p1_choice;
+    const p2 = playerRole === 2 ? choice : game.p2_choice;
+
+    let updates: any = { [updateField]: choice };
+
+    if (p1 && p2) {
+      const winner = determineWinner(p1, p2);
+      updates.status = "finished";
+      updates.winner = winner;
+      if (winner === "p1") updates.p1_score = (game.p1_score || 0) + 1;
+      if (winner === "p2") updates.p2_score = (game.p2_score || 0) + 1;
+    }
+
+    // We update via mutation.
+    // Effect handles recovery, but immediate update handles snappy response if we have both data.
+    updateGameMutation.mutate(updates);
+  };
+
+  const resetGame = () => {
+    updateGameMutation.mutate({
+      p1_choice: null,
+      p2_choice: null,
+      winner: null,
+      status: "playing",
+    });
   };
 
   const copyCode = () => {
@@ -229,7 +226,6 @@ export default function RpsPage() {
   };
 
   // --- RENDER HELPERS ---
-
   const getIcon = (choice: string | null) => {
     if (!choice)
       return (
@@ -237,24 +233,28 @@ export default function RpsPage() {
       );
     switch (choice) {
       case "rock":
-        return <Hand className="w-12 h-12 text-blue-500" />; // Pakai Hand biasa utk batu
+        return <Stone className="w-12 h-12 text-white" />;
       case "paper":
-        return <Sticker className="w-12 h-12 text-yellow-500" />; // Sticker mirip kertas
+        return <Hand className="w-12 h-12 text-white" />;
       case "scissors":
-        return <Scissors className="w-12 h-12 text-red-500" />;
+        return <Scissors className="w-12 h-12 text-white" />;
       default:
         return null;
     }
   };
 
+  const isMutating =
+    createRoomMutation.isPending ||
+    joinRoomMutation.isPending ||
+    updateGameMutation.isPending;
   const isMyTurnDone = playerRole === 1 ? !!game?.p1_choice : !!game?.p2_choice;
   const opponentName =
     playerRole === 1 ? game?.player2_name : game?.player1_name;
   const opponentMoved =
     playerRole === 1 ? !!game?.p2_choice : !!game?.p1_choice;
 
-  // LOBBY VIEW
-  if (!game) {
+  // LOBBY
+  if (!gameId || !game) {
     return (
       <div className="container max-w-md mx-auto p-4 flex flex-col justify-center min-h-[80vh]">
         <Card className="border-border/40 bg-card/50 backdrop-blur-sm">
@@ -278,7 +278,7 @@ export default function RpsPage() {
             <div className="grid grid-cols-1 gap-4 pt-2">
               <Button
                 onClick={createRoom}
-                disabled={loading}
+                disabled={isMutating}
                 className="h-12 font-bold text-lg"
               >
                 BUAT RING BARU
@@ -301,7 +301,7 @@ export default function RpsPage() {
                 />
                 <Button
                   onClick={joinRoom}
-                  disabled={loading}
+                  disabled={isMutating}
                   variant="secondary"
                   className="font-bold"
                 >
@@ -315,7 +315,7 @@ export default function RpsPage() {
     );
   }
 
-  // WAITING LOBBY
+  // WAITING
   if (game.status === "waiting") {
     return (
       <div className="container max-w-md mx-auto p-4 py-20 text-center space-y-8">
@@ -339,7 +339,7 @@ export default function RpsPage() {
         <Button
           variant="ghost"
           className="text-muted-foreground"
-          onClick={() => setGame(null)}
+          onClick={() => setGameId(null)}
         >
           Batal
         </Button>
@@ -347,7 +347,6 @@ export default function RpsPage() {
     );
   }
 
-  // PLAYING & FINISHED STATE
   return (
     <div className="container max-w-md mx-auto p-4 py-4 min-h-screen flex flex-col">
       {/* SCORING HEADER */}
@@ -433,9 +432,13 @@ export default function RpsPage() {
 
       {/* FOOTER: ME */}
       <div className="flex-1 flex flex-col justify-start items-center pt-4">
-        <p className="mb-2 text-sm text-muted-foreground font-medium tracking-widest">
-          GILIRANMU
-        </p>
+        {game.status !== "finished" ? (
+          <p className="mb-2 text-sm text-muted-foreground font-medium tracking-widest">
+            GILIRANMU
+          </p>
+        ) : (
+          <p className="mb-2 text-sm text-muted-foreground font-medium tracking-widest"></p>
+        )}
 
         {game.status === "finished" ? (
           <div className="text-center space-y-6 animate-in slide-in-from-bottom-10 fade-in duration-500">
@@ -480,13 +483,13 @@ export default function RpsPage() {
               {
                 id: "rock",
                 label: "BATU",
-                icon: Hand,
+                icon: Stone,
                 color: "hover:bg-blue-500/20 hover:border-blue-500",
               },
               {
                 id: "paper",
                 label: "KERTAS",
-                icon: Sticker,
+                icon: Hand,
                 color: "hover:bg-yellow-500/20 hover:border-yellow-500",
               },
               {
@@ -504,7 +507,7 @@ export default function RpsPage() {
                 <button
                   key={item.id}
                   onClick={() => makeMove(item.id as any)}
-                  disabled={isMyTurnDone}
+                  disabled={isMyTurnDone || isMutating}
                   className={`
                     aspect-square rounded-xl border-2 flex flex-col items-center justify-center gap-2 transition-all duration-200
                     ${

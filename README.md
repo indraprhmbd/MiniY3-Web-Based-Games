@@ -44,6 +44,7 @@ The timeless game of X and O.
 - **Components**: Shadcn/UI
 - **Icons**: Lucide React
 - **Backend/Database**: Supabase (PostgreSQL)
+- **State Management**: TanStack Query v5
 - **Language**: TypeScript
 
 ## Getting Started

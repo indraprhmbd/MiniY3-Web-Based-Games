@@ -1,14 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
-import Image from "next/image";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -22,16 +20,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
-import { useRouter } from "next/navigation";
-import {
-  PartyPopper,
-  RefreshCw,
-  Eye,
-  EyeOff,
-  AlertTriangle,
-  ArrowLeft,
-} from "lucide-react";
+import { RefreshCw, Eye, EyeOff, AlertTriangle, ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 type GameState = {
   id: string;
@@ -53,21 +44,41 @@ type GameState = {
   initial_max?: number;
 };
 
+// Fetcher function
+const fetchGame = async (id: string) => {
+  const { data, error } = await supabase
+    .from("luckyduel_games")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (error) throw error;
+  return data as GameState;
+};
+
 export default function LuckyDuelOnlinePage() {
   const [phase, setPhase] = useState<"lobby" | "setup" | "playing" | "winner">(
     "lobby"
   );
   const [roomCode, setRoomCode] = useState("");
-  const [game, setGame] = useState<GameState | null>(null);
+  const [gameId, setGameId] = useState<string | null>(null);
   const [playerName, setPlayerName] = useState("");
   const [playerRole, setPlayerRole] = useState<1 | 2 | null>(null);
   const [secretInput, setSecretInput] = useState("");
   const [guessInput, setGuessInput] = useState("");
   const [maxRangeInput, setMaxRangeInput] = useState("100");
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showMySecret, setShowMySecret] = useState(false);
   const [warning, setWarning] = useState<"too-low" | "too-high" | null>(null);
+
+  const queryClient = useQueryClient();
+
+  // Query for Game State
+  const { data: game, isLoading } = useQuery({
+    queryKey: ["luckyduel", gameId],
+    queryFn: () => fetchGame(gameId!),
+    enabled: !!gameId,
+    refetchInterval: 1000,
+  });
 
   const formatNumber = (val: string | number) => {
     if (!val && val !== 0) return "";
@@ -90,12 +101,13 @@ export default function LuckyDuelOnlinePage() {
     }
   };
 
+  // Warning logic
   useEffect(() => {
-    if (phase === "playing" && guessInput) {
+    if (phase === "playing" && guessInput && game) {
       const currentGuess = parseInt(parseNumber(guessInput));
       const isP1 = playerRole === 1;
-      const targetMin = isP1 ? game?.p2_range_min : game?.p1_range_min;
-      const targetMax = isP1 ? game?.p2_range_max : game?.p1_range_max;
+      const targetMin = isP1 ? game.p2_range_min : game.p1_range_min;
+      const targetMax = isP1 ? game.p2_range_max : game.p1_range_max;
 
       if (
         !isNaN(currentGuess) &&
@@ -113,127 +125,136 @@ export default function LuckyDuelOnlinePage() {
     }
   }, [guessInput, phase, playerRole, game]);
 
-  // Polling for updates
-  useEffect(() => {
-    if (!game?.id) return; // Removed phase === "winner" guard
-
-    const interval = setInterval(async () => {
+  // Mutations
+  const createRoomMutation = useMutation({
+    mutationFn: async ({
+      name,
+      maxRange,
+    }: {
+      name: string;
+      maxRange: number;
+    }) => {
+      const code = Math.random().toString(36).substring(2, 6).toUpperCase();
       const { data, error } = await supabase
         .from("luckyduel_games")
-        .select("*")
-        .eq("id", game.id)
+        .insert([
+          {
+            room_code: code,
+            player1_name: name,
+            status: "waiting",
+            p1_range_max: maxRange,
+            p2_range_max: maxRange,
+            initial_max: maxRange,
+          },
+        ])
+        .select()
         .single();
 
-      if (data) {
-        setGame(data);
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      setGameId(data.id);
+      setPlayerRole(1);
+      setPhase("lobby");
+      queryClient.setQueryData(["luckyduel", data.id], data);
+    },
+    onError: (err: any) => setError(err.message),
+  });
 
-        // Auto-recovery to playing if both secrets are present but status is setup
-        if (
-          data.status === "setup" &&
-          data.player1_secret &&
-          data.player2_secret
-        ) {
-          await supabase
-            .from("luckyduel_games")
-            .update({ status: "playing" })
-            .eq("id", game.id);
-        }
+  const joinRoomMutation = useMutation({
+    mutationFn: async ({ name, code }: { name: string; code: string }) => {
+      const { data, error } = await supabase
+        .from("luckyduel_games")
+        .update({ player2_name: name, status: "setup" })
+        .eq("room_code", code.toUpperCase())
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      setGameId(data.id);
+      setPlayerRole(2);
+      setPhase("setup");
+      queryClient.setQueryData(["luckyduel", data.id], data);
+    },
+    onError: () => setError("Room tidak ditemukan atau error!"),
+  });
 
-        // Phase logic based on status
-        if (data.status === "setup") {
-          if (phase !== "setup") {
-            setPhase("setup");
-            setSecretInput("");
-            setGuessInput("");
-            setWarning(null);
-            setShowMySecret(false);
-          }
-        }
-        if (data.status === "playing") setPhase("playing");
-        if (data.status === "finished") setPhase("winner");
-      }
-    }, 1000); // Faster polling for smoother reset
+  const updateGameMutation = useMutation({
+    mutationFn: async (updates: Partial<GameState>) => {
+      if (!gameId) throw new Error("No game ID");
+      const { data, error } = await supabase
+        .from("luckyduel_games")
+        .update(updates)
+        .eq("id", gameId)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(["luckyduel", gameId], data);
+    },
+  });
 
-    return () => clearInterval(interval);
-  }, [game?.id, phase, playerRole]);
-
-  // Reset func for online
-  const handleReset = async () => {
+  // Sync Phase & Auto-Recovery
+  useEffect(() => {
     if (!game) return;
-    await supabase
-      .from("luckyduel_games")
-      .update({
-        status: "setup",
-        player1_secret: null,
-        player2_secret: null,
-        winner_name: null,
-        turn: 0,
-        last_guess: null,
-        p1_range_min: 1,
-        p1_range_max: game.initial_max || 100,
-        p2_range_min: 1,
-        p2_range_max: game.initial_max || 100,
-      })
-      .eq("id", game.id);
 
+    // Auto-recovery
+    if (game.status === "setup" && game.player1_secret && game.player2_secret) {
+      updateGameMutation.mutate({ status: "playing" });
+    }
+
+    // Phase syncing
+    if (game.status === "setup") {
+      if (phase !== "setup") {
+        setPhase("setup");
+        setSecretInput("");
+        setGuessInput("");
+        setWarning(null);
+        setShowMySecret(false);
+      }
+    }
+    if (game.status === "playing" && phase !== "playing") setPhase("playing");
+    if (game.status === "finished" && phase !== "winner") setPhase("winner");
+  }, [game, phase, updateGameMutation]);
+
+  // Handlers
+  const createRoom = () => {
+    if (!playerName) return setError("Masukkan namamu!");
+    const maxRange = parseInt(parseNumber(maxRangeInput)) || 100;
+    createRoomMutation.mutate({ name: playerName, maxRange });
+  };
+
+  const joinRoom = () => {
+    if (!playerName || !roomCode)
+      return setError("Nama dan Kode Room harus diisi!");
+    joinRoomMutation.mutate({ name: playerName, code: roomCode });
+  };
+
+  const handleReset = () => {
+    if (!game) return;
+    updateGameMutation.mutate({
+      status: "setup",
+      player1_secret: null,
+      player2_secret: null,
+      winner_name: null,
+      turn: 0,
+      last_guess: null,
+      p1_range_min: 1,
+      p1_range_max: game.initial_max || 100,
+      p2_range_min: 1,
+      p2_range_max: game.initial_max || 100,
+    });
     setSecretInput("");
     setGuessInput("");
     setWarning(null);
-    // Phase will update via polling/realtime
   };
 
-  const createRoom = async () => {
-    if (!playerName) return setError("Masukkan namamu!");
-    setLoading(true);
-    const code = Math.random().toString(36).substring(2, 6).toUpperCase();
-    const maxRange = parseInt(parseNumber(maxRangeInput)) || 100;
-
-    const { data, error } = await supabase
-      .from("luckyduel_games")
-      .insert([
-        {
-          room_code: code,
-          player1_name: playerName,
-          status: "waiting",
-          p1_range_max: maxRange,
-          p2_range_max: maxRange,
-          initial_max: maxRange,
-        },
-      ])
-      .select()
-      .single();
-
-    if (error) setError(error.message);
-    else {
-      setGame(data);
-      setPlayerRole(1);
-      setPhase("lobby");
-    }
-    setLoading(false);
-  };
-
-  const joinRoom = async () => {
-    if (!playerName || !roomCode)
-      return setError("Nama dan Kode Room harus diisi!");
-    setLoading(true);
-
-    const { data, error } = await supabase
-      .from("luckyduel_games")
-      .update({ player2_name: playerName, status: "setup" })
-      .eq("room_code", roomCode.toUpperCase())
-      .select()
-      .single();
-
-    if (error) setError("Room tidak ditemukan atau error!");
-    else {
-      setGame(data);
-      setPlayerRole(2);
-      setPhase("setup");
-    }
-    setLoading(false);
-  };
-
-  const submitSecret = async () => {
+  const submitSecret = () => {
     const secret = parseInt(parseNumber(secretInput));
     if (isNaN(secret)) return;
 
@@ -243,14 +264,11 @@ export default function LuckyDuelOnlinePage() {
       return;
     }
 
-    setLoading(true);
-
     const update: any =
       playerRole === 1
         ? { player1_secret: secret }
         : { player2_secret: secret };
 
-    // Check if the other secret is already there to start the game
     if (
       (playerRole === 1 && game?.player2_secret) ||
       (playerRole === 2 && game?.player1_secret)
@@ -258,33 +276,18 @@ export default function LuckyDuelOnlinePage() {
       update.status = "playing";
     }
 
-    const { data, error } = await supabase
-      .from("luckyduel_games")
-      .update(update)
-      .eq("id", game?.id)
-      .select()
-      .single();
-
-    if (data) {
-      setGame(data);
-      if (data.status === "playing") {
-        setPhase("playing");
-      }
-    }
-    setLoading(false);
+    updateGameMutation.mutate(update);
   };
 
-  const handleGuess = async () => {
+  const handleGuess = () => {
     const guess = parseInt(parseNumber(guessInput));
     if (isNaN(guess) || !game) return;
 
-    // Fix: Validate against the *target* range (opponent's secret range)
     const maxVal = playerRole === 1 ? game.p2_range_max : game.p1_range_max;
     if (guess < 1 || guess > maxVal) {
       alert(`Tebakan harus antara 1 - ${formatNumber(maxVal)}!`);
       return;
     }
-    setLoading(true);
 
     const isP1 = playerRole === 1;
     const opponentSecret = isP1 ? game.player2_secret : game.player1_secret;
@@ -300,14 +303,11 @@ export default function LuckyDuelOnlinePage() {
       nextStatus = "finished";
       winner = isP1 ? game.player1_name : game.player2_name;
     } else {
-      // Narrow range
       if (isP1) {
-        // P1 is guessing for P2's secret
         if (guess < opponentSecret!)
           p2RangeMin = Math.max(p2RangeMin, guess + 1);
         else p2RangeMax = Math.min(p2RangeMax, guess - 1);
       } else {
-        // P2 is guessing for P1's secret
         if (guess < opponentSecret!)
           p1RangeMin = Math.max(p1RangeMin, guess + 1);
         else p1RangeMax = Math.min(p1RangeMax, guess - 1);
@@ -330,18 +330,16 @@ export default function LuckyDuelOnlinePage() {
       else updates.p2_score = (game.p2_score || 0) + 1;
     }
 
-    const { data, error } = await supabase
-      .from("luckyduel_games")
-      .update(updates)
-      .eq("id", game.id)
-      .select()
-      .single();
-
-    if (data) setGame(data);
+    updateGameMutation.mutate(updates);
     setGuessInput("");
-    setLoading(false);
   };
 
+  const isMutating =
+    createRoomMutation.isPending ||
+    joinRoomMutation.isPending ||
+    updateGameMutation.isPending;
+
+  // LOBBY UI
   if (phase === "lobby" && playerRole === 1 && game?.status === "waiting") {
     return (
       <div className="container max-w-md mx-auto p-4 py-20 text-center space-y-8">
@@ -368,16 +366,16 @@ export default function LuckyDuelOnlinePage() {
         <Button
           variant="ghost"
           className="text-muted-foreground"
-          onClick={() => setGame(null)}
+          onClick={() => {
+            setGameId(null);
+            setGameId(null); // Clear game ID
+          }}
         >
           Batal
         </Button>
       </div>
     );
   }
-
-  // Common UI logic for setup, playing, winner...
-  // (Simplified for brevity, similar to Hotseat but with sync)
 
   return (
     <div className="container max-w-lg mx-auto p-4 flex-1 flex flex-col justify-center">
@@ -423,6 +421,8 @@ export default function LuckyDuelOnlinePage() {
           </div>
         </div>
       )}
+
+      {/* LOBBY / JOIN FORM */}
       {phase === "lobby" && !playerRole && (
         <Card className="bg-card/50 backdrop-blur-md">
           <CardHeader className="pb-4">
@@ -457,7 +457,7 @@ export default function LuckyDuelOnlinePage() {
                 </div>
                 <Button
                   onClick={createRoom}
-                  disabled={loading}
+                  disabled={isMutating}
                   variant="outline"
                   className="w-full"
                 >
@@ -474,7 +474,7 @@ export default function LuckyDuelOnlinePage() {
                   />
                   <Button
                     onClick={joinRoom}
-                    disabled={loading}
+                    disabled={isMutating}
                     className="w-full"
                   >
                     JOIN
@@ -489,6 +489,7 @@ export default function LuckyDuelOnlinePage() {
         </Card>
       )}
 
+      {/* SETUP PHASE */}
       {(phase === "setup" || game?.status === "setup") && (
         <Card className="bg-card/50 backdrop-blur-md">
           <CardHeader>
@@ -516,7 +517,7 @@ export default function LuckyDuelOnlinePage() {
             <Button
               onClick={submitSecret}
               disabled={
-                loading ||
+                isMutating ||
                 (playerRole === 1
                   ? !!game?.player1_secret
                   : !!game?.player2_secret)
@@ -535,6 +536,7 @@ export default function LuckyDuelOnlinePage() {
         </Card>
       )}
 
+      {/* PLAYING PHASE */}
       {phase === "playing" && game && (
         <div className="space-y-6">
           <div className="text-center space-y-2">
@@ -628,7 +630,7 @@ export default function LuckyDuelOnlinePage() {
               </div>
               <Button
                 onClick={handleGuess}
-                disabled={loading || game.turn !== playerRole! - 1}
+                disabled={isMutating || game.turn !== playerRole! - 1}
                 className={`w-full h-12 transition-all duration-300 ${
                   warning
                     ? "bg-yellow-500 hover:bg-yellow-600 text-black border-none"
@@ -647,6 +649,7 @@ export default function LuckyDuelOnlinePage() {
         </div>
       )}
 
+      {/* WINNER DIALOG */}
       <Dialog open={phase === "winner"}>
         <DialogContent className="text-center">
           <DialogHeader>
